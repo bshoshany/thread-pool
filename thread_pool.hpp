@@ -1,13 +1,13 @@
 #pragma once
 
 /**
- * @file matrix.hpp
+ * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.0
- * @date 2021-01-15
- * @copyright Copyright (c) 2021
+ * @version 1.1
+ * @date 2021-04-24
+ * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license.
  *
- * @brief A simple but powerful thread pool class. Please see the attached README.md file for more information and examples.
+ * @brief A simple but powerful C++17 thread pool class. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
  */
 
 #include <algorithm>   // std::max
@@ -139,7 +139,7 @@ public:
      * @param args The arguments to pass to the function.
      */
     template <typename F, typename... A>
-    void push_task(const F &task, const A &... args)
+    void push_task(const F &task, const A &...args)
     {
         push_task([task, args...] { task(args...); });
     }
@@ -170,7 +170,7 @@ public:
      * @return A future to be used later to check if the function has finished its execution.
      */
     template <typename F, typename... A, typename = std::enable_if_t<std::is_void_v<std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>>>
-    std::future<bool> submit(const F &task, const A &... args)
+    std::future<bool> submit(const F &task, const A &...args)
     {
         std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
         std::future<bool> future = promise->get_future();
@@ -192,7 +192,7 @@ public:
      * @return A future to be used later to obtain the function's returned value, waiting for it to finish its execution if needed.
      */
     template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>, typename = std::enable_if_t<!std::is_void_v<R>>>
-    std::future<R> submit(const F &task, const A &... args)
+    std::future<R> submit(const F &task, const A &...args)
     {
         std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
         std::future<R> future = promise->get_future();
@@ -335,7 +335,7 @@ public:
      * @param items The items to print.
      */
     template <typename... T>
-    void print(const T &... items)
+    void print(const T &...items)
     {
         const std::scoped_lock lock(stream_mutex);
         (out_stream << ... << items);
@@ -348,7 +348,7 @@ public:
      * @param items The items to print.
      */
     template <typename... T>
-    void println(const T &... items)
+    void println(const T &...items)
     {
         print(items..., '\n');
     }

@@ -1,27 +1,25 @@
-<a id="markdown-a-simple-but-powerful-c17-thread-pool-class" name="a-simple-but-powerful-c17-thread-pool-class"></a>
 # A simple but powerful C++17 thread pool class
 
-<!-- TOC -->
+<!-- TOC depthFrom:2 -->
 
-- [A simple but powerful C++17 thread pool class](#a-simple-but-powerful-c17-thread-pool-class)
-    - [Introduction](#introduction)
-    - [Features](#features)
-    - [Basic usage](#basic-usage)
-        - [Including the library](#including-the-library)
-        - [Constructors](#constructors)
-        - [Submitting tasks to the queue](#submitting-tasks-to-the-queue)
-        - [Parallelizing loops](#parallelizing-loops)
-    - [Advanced usage](#advanced-usage)
-        - [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
-        - [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
-        - [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
-    - [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
-        - [Motivation](#motivation)
-        - [The synced stream class](#the-synced-stream-class)
-    - [Compiling](#compiling)
-    - [Version history](#version-history)
-    - [Feedback](#feedback)
-    - [Author and copyright](#author-and-copyright)
+- [Introduction](#introduction)
+- [Features](#features)
+- [Basic usage](#basic-usage)
+    - [Including the library](#including-the-library)
+    - [Constructors](#constructors)
+    - [Submitting tasks to the queue](#submitting-tasks-to-the-queue)
+    - [Parallelizing loops](#parallelizing-loops)
+- [Advanced usage](#advanced-usage)
+    - [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
+    - [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
+    - [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
+- [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
+    - [Motivation](#motivation)
+    - [The synced stream class](#the-synced-stream-class)
+- [Compiling](#compiling)
+- [Version history](#version-history)
+- [Feedback](#feedback)
+- [Author and copyright](#author-and-copyright)
 
 <!-- /TOC -->
 
@@ -276,11 +274,13 @@ This library was tested on the following compilers and platforms:
 * Clang 11.0.0 on Windows 10 build 19042.746 and Ubuntu 20.04.1 LTS.
 * MSVC v14.28.29333 on Windows 10 build 19042.746.
 
-As this library requires C++17 features, the code must be compiled with C++17 support. For GCC and Clang, use the `-std=c++17` flag. For MSVC, use `/std:c++17`. Additionally, on Linux, you may need to pass `-pthread` to GCC and Clang to enable the POSIX threads library.
+As this library requires C++17 features, the code must be compiled with C++17 support. For GCC and Clang, use the `-std=c++17` flag. For MSVC, use `/std:c++17`. On Linux, you may need to pass `-pthread` to GCC and Clang to enable the POSIX threads library.
 
 <a id="markdown-version-history" name="version-history"></a>
 ## Version history
 
+* Version 1.1 (2021-04-24)
+    * Cosmetic changes only. Fixed a typo in the Doxygen comments and added a link to the GitHub repository.
 * Version 1.0 (2021-01-15)
     * Initial release.
 
@@ -293,3 +293,5 @@ If you would like a request any additional features, or if you encounter any bug
 ## Author and copyright
 
 Copyright (c) 2021 [Barak Shoshany](http://baraksh.com) (baraksh@gmail.com). Licensed under the [MIT license](LICENSE.txt).
+
+If you use this class in your code, please acknowledge the author and provide a link to the [GitHub repository](https://github.com/bshoshany/thread-pool). Thank you!
