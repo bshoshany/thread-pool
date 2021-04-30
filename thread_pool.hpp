@@ -3,18 +3,20 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.1
- * @date 2021-04-24
- * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license.
+ * @version 1.2
+ * @date 2021-04-29
+ * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this class in your code, please acknowledge the author and provide a link to the GitHub repository. Thank you!
  *
- * @brief A simple but powerful C++17 thread pool class. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
+ * @brief A simple but powerful C++17 thread pool class.
+ * @details This class was built from scratch with maximum performance in mind, and is suitable for use in high-performance computing clusters with a very large number of CPU cores. It is compact and self-contained, and includes features such as automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
  */
 
 #include <algorithm>   // std::max
 #include <atomic>      // std::atomic
-#include <cstdint>     // std::uint_fast32_t
+#include <chrono>      // std::chrono
+#include <cstdint>     // std::int_fast64_t, std::uint_fast32_t
 #include <functional>  // std::function
-#include <future>      // std::promise
+#include <future>      // std::future, std::promise
 #include <iostream>    // std::cout, std::ostream
 #include <memory>      // std::shared_ptr, std::unique_ptr
 #include <mutex>       // std::mutex, std::scoped_lock
@@ -23,8 +25,10 @@
 #include <type_traits> // std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
 #include <utility>     // std::move, std::swap
 
+// ================================== Begin class thread_pool ================================== //
+
 /**
- * @brief A simple but powerful thread pool class. Maintains a queue of tasks, which are executed by threads in the pool as they become available.
+ * @brief A simple but powerful thread pool class. The user submits tasks to be executed into a queue. Whenever a thread becomes available, it pops a task from the queue and executes it. Each task is automatically assigned a future, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
  */
 class thread_pool
 {
@@ -38,10 +42,10 @@ public:
     /**
      * @brief Construct a new thread pool.
      *
-     * @param _thread_count The number of threads to use. Default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, 1 thread will be used.
+     * @param _thread_count The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, the default value will be used instead.
      */
     thread_pool(const ui32 &_thread_count = std::thread::hardware_concurrency())
-        : thread_count(std::max<ui32>(_thread_count, 1)), threads(new std::thread[std::max<ui32>(_thread_count, 1)])
+        : thread_count(_thread_count ? _thread_count : std::thread::hardware_concurrency()), threads(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()])
     {
         create_threads();
     }
@@ -71,14 +75,14 @@ public:
     }
 
     /**
-     * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the thread pool, and waiting for all blocks to finish executing. The loop will be equivalent to "for (T i = first_index; i <= last_index; i++) loop(i);".
+     * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the thread pool, and waiting for all blocks to finish executing. The loop will be equivalent to: for (T i = first_index; i <= last_index; i++) loop(i);
      *
      * @tparam T The type of the loop index. Should be a signed or unsigned integer.
      * @tparam F The type of the function to loop through.
      * @param first_index The first index in the loop (inclusive).
      * @param last_index The last index in the loop (inclusive).
      * @param loop The function to loop through. Should take exactly one argument, the loop index.
-     * @param num_tasks The maximum number of tasks to split the loop into. Default is to use the number of threads in the pool.
+     * @param num_tasks The maximum number of tasks to split the loop into. The default is to use the number of threads in the pool.
      */
     template <typename T, typename F>
     void parallelize_loop(T first_index, T last_index, const F &loop, ui32 num_tasks = 0)
@@ -147,15 +151,15 @@ public:
     /**
      * @brief Reset the number of threads in the pool. Waits for all submitted tasks to be completed, then destroys all threads and creates a new thread pool with the new number of threads.
      *
-     * @param _thread_count The number of threads to use. Default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, 1 thread will be used.
+     * @param _thread_count The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, the default value will be used instead.
      */
     void reset(const ui32 &_thread_count = std::thread::hardware_concurrency())
     {
         wait_for_tasks();
         running = false;
         destroy_threads();
-        thread_count = std::max<ui32>(_thread_count, 1);
-        threads.reset(new std::thread[std::max<ui32>(_thread_count, 1)]);
+        thread_count = _thread_count ? _thread_count : std::thread::hardware_concurrency();
+        threads.reset(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()]);
         running = true;
         create_threads();
     }
@@ -203,7 +207,7 @@ public:
     }
 
     /**
-     * @brief Wait for all submitted tasks to be completed - both those that are currently being executed by threads, and those that are still waiting in the queue. To wait for a specific task, use push_task_future instead.
+     * @brief Wait for all submitted tasks to be completed - both those that are currently being executed by threads, and those that are still waiting in the queue. To wait for a specific task, use submit() instead, and call the wait() member function of the generated future.
      */
     void wait_for_tasks()
     {
@@ -212,6 +216,15 @@ public:
             std::this_thread::yield();
         }
     }
+
+    // ===========
+    // Public data
+    // ===========
+
+    /**
+     * @brief The duration, in microseconds, that the worker function should sleep for when it cannot find any tasks in the queue. If set to 0, then instead of sleeping, the worker function will execute std::this_thread::yield() if there are no tasks in the queue. The default value is 1000.
+     */
+    ui32 sleep_duration = 1000;
 
 private:
     // ========================
@@ -260,7 +273,7 @@ private:
     }
 
     /**
-     * @brief A worker function to be assigned to each thread in the pool. Pops tasks out of the queue and executes them, until the atomic variable running is set to false.
+     * @brief A worker function to be assigned to each thread in the pool. Continuously pops tasks out of the queue and executes them, as long as the atomic variable running is set to true.
      */
     void worker()
     {
@@ -274,7 +287,10 @@ private:
             }
             else
             {
-                std::this_thread::yield();
+                if (sleep_duration)
+                    std::this_thread::sleep_for(std::chrono::microseconds(sleep_duration));
+                else
+                    std::this_thread::yield();
             }
         }
     }
@@ -314,8 +330,12 @@ private:
     std::unique_ptr<std::thread[]> threads;
 };
 
+// =================================== End class thread_pool =================================== //
+
+// ================================= Begin class synced_stream ================================= //
+
 /**
- * @brief A class to synchronize printing to an output stream by different threads.
+ * @brief A helper class to synchronize printing to an output stream by different threads.
  */
 class synced_stream
 {
@@ -323,13 +343,13 @@ public:
     /**
      * @brief Construct a new synced stream.
      *
-     * @param _out_stream The output stream to sync to. Default is std::cout.
+     * @param _out_stream The output stream to print to. The default value is std::cout.
      */
     synced_stream(std::ostream &_out_stream = std::cout)
         : out_stream(_out_stream){};
 
     /**
-     * @brief Print any number of items into the output stream. Ensures that no other threads print to this stream simultaneously, as long as they all use this synced_stream object to print.
+     * @brief Print any number of items into the output stream. Ensures that no other threads print to this stream simultaneously, as long as they all exclusively use this synced_stream object to print.
      *
      * @tparam T The types of the items
      * @param items The items to print.
@@ -342,7 +362,7 @@ public:
     }
 
     /**
-     * @brief Print any number of items into the output stream, followed by a newline character. Ensures that no other threads print to this stream simultaneously, as long as they all use this synced_stream object to print.
+     * @brief Print any number of items into the output stream, followed by a newline character. Ensures that no other threads print to this stream simultaneously, as long as they all exclusively use this synced_stream object to print.
      *
      * @tparam T The types of the items
      * @param items The items to print.
@@ -364,3 +384,55 @@ private:
      */
     std::ostream &out_stream;
 };
+
+// ================================== End class synced_stream ================================== //
+
+// ===================================== Begin class timer ===================================== //
+
+/**
+ * @brief A helper class to measure execution time for benchmarking purposes.
+ */
+class timer
+{
+    typedef std::int_fast64_t i64;
+
+public:
+    /**
+     * @brief Start (or restart) measuring time.
+     */
+    void start()
+    {
+        start_time = std::chrono::steady_clock::now();
+    }
+
+    /**
+     * @brief Stop measuring time and store the elapsed time since start().
+     */
+    void stop()
+    {
+        elapsed_time = std::chrono::steady_clock::now() - start_time;
+    }
+
+    /**
+     * @brief Get the number of milliseconds that have elapsed between start() and stop().
+     *
+     * @return The number of milliseconds.
+     */
+    i64 ms() const
+    {
+        return (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time)).count();
+    }
+
+private:
+    /**
+     * @brief The time point when measuring started.
+     */
+    std::chrono::time_point<std::chrono::steady_clock> start_time = std::chrono::steady_clock::now();
+
+    /**
+     * @brief The duration that has elapsed between start() and stop().
+     */
+    std::chrono::duration<double> elapsed_time = std::chrono::duration<double>::zero();
+};
+
+// ====================================== End class timer ====================================== //
