@@ -11,7 +11,6 @@
  * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository for documentation and updates, or to submit feature requests and bug reports.
  */
 
-#include <algorithm>   // std::max
 #include <atomic>      // std::atomic
 #include <chrono>      // std::chrono
 #include <cstdint>     // std::int_fast64_t, std::uint_fast32_t
@@ -96,7 +95,7 @@ public:
         if (block_size == 0)
         {
             block_size = 1;
-            num_tasks = std::max((ui32)1, (ui32)total_size);
+            num_tasks = (ui32)total_size > 1 ? (ui32)total_size : 1;
         }
         std::atomic<ui32> blocks_running = 0;
         for (ui32 t = 0; t < num_tasks; t++)
