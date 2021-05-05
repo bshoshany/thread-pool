@@ -3,15 +3,14 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.3
- * @date 2021-05-03
+ * @version 1.4
+ * @date 2021-05-05
  * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you found this code useful, please consider providing a link to the GitHub repository: https://github.com/bshoshany/thread-pool and/or citing the companion paper: https://arxiv.org/abs/2105.00613
  *
  * @brief A C++17 thread pool for high-performance scientific computing.
  * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository for documentation and updates, or to submit feature requests and bug reports.
  */
 
-#include <algorithm>   // std::max
 #include <atomic>      // std::atomic
 #include <chrono>      // std::chrono
 #include <cstdint>     // std::int_fast64_t, std::uint_fast32_t
@@ -25,10 +24,11 @@
 #include <type_traits> // std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
 #include <utility>     // std::move, std::swap
 
-// ================================== Begin class thread_pool ================================== //
+// ============================================================================================= //
+//                                    Begin class thread_pool                                    //
 
 /**
- * @brief A simple but powerful thread pool class. The user submits tasks to be executed into a queue. Whenever a thread becomes available, it pops a task from the queue and executes it. Each task is automatically assigned a future, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
+ * @brief A C++17 thread pool class. The user submits tasks to be executed into a queue. Whenever a thread becomes available, it pops a task from the queue and executes it. Each task is automatically assigned a future, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
  */
 class thread_pool
 {
@@ -51,7 +51,7 @@ public:
     }
 
     /**
-     * @brief Destruct the thread pool. Waits for all submitted tasks to be completed, then destroys all threads.
+     * @brief Destruct the thread pool. Waits for all tasks to complete, then destroys all threads. Note that if the variable paused is set to true, then any tasks still in the queue will never be executed.
      */
     ~thread_pool()
     {
@@ -63,6 +63,37 @@ public:
     // =======================
     // Public member functions
     // =======================
+
+    /**
+     * @brief Get the number of tasks currently waiting in the queue to be executed by the threads.
+     *
+     * @return The number of queued tasks.
+     */
+    size_t get_tasks_queued() const
+    {
+        const std::scoped_lock lock(queue_mutex);
+        return tasks.size();
+    }
+
+    /**
+     * @brief Get the number of tasks currently being executed by the threads.
+     *
+     * @return The number of running tasks.
+     */
+    ui32 get_tasks_running() const
+    {
+        return tasks_total - (ui32)get_tasks_queued();
+    }
+
+    /**
+     * @brief Get the total number of unfinished tasks - either still in the queue, or running in a thread.
+     *
+     * @return The total number of tasks.
+     */
+    ui32 get_tasks_total() const
+    {
+        return tasks_total;
+    }
 
     /**
      * @brief Get the number of threads in the pool.
@@ -96,7 +127,7 @@ public:
         if (block_size == 0)
         {
             block_size = 1;
-            num_tasks = std::max((ui32)1, (ui32)total_size);
+            num_tasks = (ui32)total_size > 1 ? (ui32)total_size : 1;
         }
         std::atomic<ui32> blocks_running = 0;
         for (ui32 t = 0; t < num_tasks; t++)
@@ -104,15 +135,14 @@ public:
             T start = (T)(t * block_size + first_index);
             T end = (t == num_tasks - 1) ? last_index : (T)((t + 1) * block_size + first_index - 1);
             blocks_running++;
-            push_task([start, end, &loop, &blocks_running]
-                      {
-                          for (T i = start; i <= end; i++)
-                              loop(i);
-                          blocks_running--;
-                      });
+            push_task([start, end, &loop, &blocks_running] {
+                for (T i = start; i <= end; i++)
+                    loop(i);
+                blocks_running--;
+            });
             while (blocks_running != 0)
             {
-                std::this_thread::yield();
+                sleep_or_yield();
             }
         }
     }
@@ -126,7 +156,7 @@ public:
     template <typename F>
     void push_task(const F &task)
     {
-        tasks_waiting++;
+        tasks_total++;
         {
             const std::scoped_lock lock(queue_mutex);
             tasks.push(std::function<void()>(task));
@@ -145,24 +175,26 @@ public:
     template <typename F, typename... A>
     void push_task(const F &task, const A &...args)
     {
-        push_task([task, args...]
-                  { task(args...); });
+        push_task([task, args...] { task(args...); });
     }
 
     /**
-     * @brief Reset the number of threads in the pool. Waits for all submitted tasks to be completed, then destroys all threads and creates a new thread pool with the new number of threads.
+     * @brief Reset the number of threads in the pool. Waits for all currently running tasks to be completed, then destroys all threads in the pool and creates a new thread pool with the new number of threads. Any tasks that were waiting in the queue before the pool was reset will then be executed by the new threads. If the pool was paused before resetting it, the new pool will be paused as well.
      *
      * @param _thread_count The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, the default value will be used instead.
      */
     void reset(const ui32 &_thread_count = std::thread::hardware_concurrency())
     {
+        bool was_paused = paused;
+        paused = true;
         wait_for_tasks();
         running = false;
         destroy_threads();
         thread_count = _thread_count ? _thread_count : std::thread::hardware_concurrency();
-        threads.reset(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()]);
-        running = true;
+        threads.reset(new std::thread[thread_count]);
+        paused = was_paused;
         create_threads();
+        running = true;
     }
 
     /**
@@ -179,11 +211,10 @@ public:
     {
         std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
         std::future<bool> future = promise->get_future();
-        push_task([task, args..., promise]
-                  {
-                      task(args...);
-                      promise->set_value(true);
-                  });
+        push_task([task, args..., promise] {
+            task(args...);
+            promise->set_value(true);
+        });
         return future;
     }
 
@@ -202,25 +233,39 @@ public:
     {
         std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
         std::future<R> future = promise->get_future();
-        push_task([task, args..., promise]
-                  { promise->set_value(task(args...)); });
+        push_task([task, args..., promise] { promise->set_value(task(args...)); });
         return future;
     }
 
     /**
-     * @brief Wait for all submitted tasks to be completed - both those that are currently being executed by threads, and those that are still waiting in the queue. To wait for a specific task, use submit() instead, and call the wait() member function of the generated future.
+     * @brief Wait for tasks to be completed. Normally, this function waits for all tasks, both those that are currently running in the threads and those that are still waiting in the queue. However, if the variable paused is set to true, this function only waits for the currently running tasks (otherwise it would wait forever). To wait for a specific task, use submit() instead, and call the wait() member function of the generated future.
      */
     void wait_for_tasks()
     {
-        while (tasks_waiting != 0)
+        while (true)
         {
-            std::this_thread::yield();
+            if (!paused)
+            {
+                if (tasks_total == 0)
+                    break;
+            }
+            else
+            {
+                if (get_tasks_running() == 0)
+                    break;
+            }
+            sleep_or_yield();
         }
     }
 
     // ===========
     // Public data
     // ===========
+
+    /**
+     * @brief An atomic variable indicating to the workers to pause. When set to true, the workers temporarily stop popping new tasks out of the queue, although any tasks already executed will keep running until they are done. Set to false again to resume popping tasks.
+     */
+    std::atomic<bool> paused = false;
 
     /**
      * @brief The duration, in microseconds, that the worker function should sleep for when it cannot find any tasks in the queue. If set to 0, then instead of sleeping, the worker function will execute std::this_thread::yield() if there are no tasks in the queue. The default value is 1000.
@@ -274,6 +319,18 @@ private:
     }
 
     /**
+     * @brief Sleep for sleep_duration microseconds. If that variable is set to zero, yield instead.
+     *
+     */
+    void sleep_or_yield()
+    {
+        if (sleep_duration)
+            std::this_thread::sleep_for(std::chrono::microseconds(sleep_duration));
+        else
+            std::this_thread::yield();
+    }
+
+    /**
      * @brief A worker function to be assigned to each thread in the pool. Continuously pops tasks out of the queue and executes them, as long as the atomic variable running is set to true.
      */
     void worker()
@@ -281,17 +338,14 @@ private:
         while (running)
         {
             std::function<void()> task;
-            if (pop_task(task))
+            if (!paused and pop_task(task))
             {
                 task();
-                tasks_waiting--;
+                tasks_total--;
             }
             else
             {
-                if (sleep_duration)
-                    std::this_thread::sleep_for(std::chrono::microseconds(sleep_duration));
-                else
-                    std::this_thread::yield();
+                sleep_or_yield();
             }
         }
     }
@@ -301,19 +355,14 @@ private:
     // ============
 
     /**
-     * @brief An atomic variable indicating to the workers to keep running.
-     */
-    std::atomic<bool> running = true;
-
-    /**
-     * @brief An atomic variable to keep track of how many tasks are currently waiting to finish - either still in the queue, or running in a thread.
-     */
-    std::atomic<ui32> tasks_waiting = 0;
-
-    /**
      * @brief A mutex to synchronize access to the task queue by different threads.
      */
     mutable std::mutex queue_mutex;
+
+    /**
+     * @brief An atomic variable indicating to the workers to keep running. When set to false, the workers permanently stop working.
+     */
+    std::atomic<bool> running = true;
 
     /**
      * @brief A queue of tasks to be executed by the threads.
@@ -329,11 +378,18 @@ private:
      * @brief A smart pointer to manage the memory allocated for the threads.
      */
     std::unique_ptr<std::thread[]> threads;
+
+    /**
+     * @brief An atomic variable to keep track of the total number of unfinished tasks - either still in the queue, or running in a thread.
+     */
+    std::atomic<ui32> tasks_total = 0;
 };
 
-// =================================== End class thread_pool =================================== //
+//                                     End class thread_pool                                     //
+// ============================================================================================= //
 
-// ================================= Begin class synced_stream ================================= //
+// ============================================================================================= //
+//                                   Begin class synced_stream                                   //
 
 /**
  * @brief A helper class to synchronize printing to an output stream by different threads.
@@ -386,9 +442,11 @@ private:
     std::ostream &out_stream;
 };
 
-// ================================== End class synced_stream ================================== //
+//                                    End class synced_stream                                    //
+// ============================================================================================= //
 
-// ===================================== Begin class timer ===================================== //
+// ============================================================================================= //
+//                                       Begin class timer                                       //
 
 /**
  * @brief A helper class to measure execution time for benchmarking purposes.
@@ -436,4 +494,5 @@ private:
     std::chrono::duration<double> elapsed_time = std::chrono::duration<double>::zero();
 };
 
-// ====================================== End class timer ====================================== //
+//                                        End class timer                                        //
+// ============================================================================================= //
