@@ -1,10 +1,20 @@
+[![DOI:10.5281/zenodo.4742687](https://zenodo.org/badge/DOI/10.5281/zenodo.4742687.svg)](https://doi.org/10.5281/zenodo.4742687)
+[![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b.svg)](https://arxiv.org/abs/2105.00613)
+[![License: MIT](https://img.shields.io/github/license/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt)
+![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)
+![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/thread_pool.hpp)
+![GitHub last commit](https://img.shields.io/github/last-commit/bshoshany/thread-pool)
+[![GitHub repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=social)](https://github.com/bshoshany/thread-pool)
+[![Twitter @BarakShoshany](https://img.shields.io/twitter/follow/BarakShoshany?style=social)](https://twitter.com/BarakShoshany)
+
 # A C++17 Thread Pool for High-Performance Scientific Computing
 
 **Barak Shoshany**\
 Department of Physics, Brock University,\
 1812 Sir Isaac Brock Way, St. Catharines, Ontario, L2S 3A1, Canada\
-[baraksh@gmail.com](mailto:baraksh@gmail.com) | [https://baraksh.com/](https://baraksh.com/)\
-Companion paper: [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)
+[bshoshany@brocku.ca](mailto:bshoshany@brocku.ca) | [https://baraksh.com/](https://baraksh.com/)\
+Companion paper: [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)\
+DOI: [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687)
 
 <!-- TOC depthFrom:2 -->
 
@@ -33,7 +43,7 @@ Companion paper: [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)
     - [Dual Intel Xeon Gold 6148 (80 threads)](#dual-intel-xeon-gold-6148-80-threads)
 - [Version history](#version-history)
 - [Feedback](#feedback)
-- [Author and copyright](#author-and-copyright)
+- [Copyright and citing](#copyright-and-citing)
 
 <!-- /TOC -->
 
@@ -70,7 +80,7 @@ As demonstrated in the performance tests [below](#performance-tests), using our 
     * Reusing threads avoids the overhead of creating and destroying them for individual tasks.
     * A task queue ensures that there are never more threads running in parallel than allowed by the hardware.
 * **Lightweight:**
-    * Only ~160 lines of code, excluding comments, blank lines, and the two optional helper classes.
+    * Only ~180 lines of code, excluding comments, blank lines, and the two optional helper classes.
     * Single header file: simply `#include "thread_pool.hpp"`.
     * Header-only: no need to install or build the library.
     * Self-contained: no external requirements or dependencies. Does not require OpenMP or any other multithreading APIs. Only uses the C++ standard library, and works with any C++17-compliant compiler.
@@ -691,6 +701,9 @@ An interesting point to notice is that for **single-threaded** calculations (1 b
 <a id="markdown-version-history" name="version-history"></a>
 ## Version history
 
+* Version 1.5 (2021-05-07)
+    * This library now has a DOI for citation purposes. Information on how to cite it in publications has been added to the source code and to `README.md`.
+    * Added GitHub badges to `README.md`.
 * Version 1.4 (2021-05-05)
     * Added three new public member functions to monitor the tasks submitted to the pool:
         * `get_tasks_queued()` gets the number of tasks currently waiting in the queue to be executed by the threads.
@@ -725,9 +738,29 @@ An interesting point to notice is that for **single-threaded** calculations (1 b
 
 If you would like a request any additional features, or if you encounter any bugs, please feel free to [open a new issue](https://github.com/bshoshany/thread-pool/issues)!
 
-<a id="markdown-author-and-copyright" name="author-and-copyright"></a>
-## Author and copyright
+<a id="markdown-copyright-and-citing" name="copyright-and-citing"></a>
+## Copyright and citing
 
-Copyright (c) 2021 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt). If you found this code useful, please consider providing a link to the [GitHub repository](https://github.com/bshoshany/thread-pool) and/or citing the [companion paper](https://arxiv.org/abs/2105.00613):
+Copyright (c) 2021 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
 
-* Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", [arXiv:2105.00613](https://arxiv.org/abs/2105.00613) (May 2021)
+If you use this library in published research, please cite it as follows:
+
+* Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687), [arXiv:2105.00613](https://arxiv.org/abs/2105.00613) (May 2021)
+
+You can use the following BibTeX entry:
+
+```none
+@article{Shoshany2021_ThreadPool,
+    archiveprefix = {arXiv},
+    author        = {Barak Shoshany},
+    doi           = {10.5281/zenodo.4742687},
+    eid           = {arXiv:2105.00613},
+    eprint        = {2105.00613},
+    journal       = {arXiv e-prints},
+    keywords      = {Computer Science - Distributed, Parallel, and Cluster Computing, D.1.3, D.1.5},
+    month         = {May},
+    primaryclass  = {cs.DC},
+    title         = {{A C++17 Thread Pool for High-Performance Scientific Computing}},
+    year          = {2021}
+}
+```

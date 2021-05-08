@@ -3,9 +3,10 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.4
- * @date 2021-05-05
- * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you found this code useful, please consider providing a link to the GitHub repository: https://github.com/bshoshany/thread-pool and/or citing the companion paper: https://arxiv.org/abs/2105.00613
+ * @version 1.5
+ * @date 2021-05-07
+ * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
+ *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief A C++17 thread pool for high-performance scientific computing.
  * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository for documentation and updates, or to submit feature requests and bug reports.
