@@ -3,8 +3,8 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.5
- * @date 2021-05-07
+ * @version 1.6
+ * @date 2021-05-26
  * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
  *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
@@ -136,11 +136,12 @@ public:
             T start = (T)(t * block_size + first_index);
             T end = (t == num_tasks - 1) ? last_index : (T)((t + 1) * block_size + first_index - 1);
             blocks_running++;
-            push_task([start, end, &loop, &blocks_running] {
-                for (T i = start; i <= end; i++)
-                    loop(i);
-                blocks_running--;
-            });
+            push_task([start, end, &loop, &blocks_running]
+                      {
+                          for (T i = start; i <= end; i++)
+                              loop(i);
+                          blocks_running--;
+                      });
             while (blocks_running != 0)
             {
                 sleep_or_yield();
@@ -176,7 +177,8 @@ public:
     template <typename F, typename... A>
     void push_task(const F &task, const A &...args)
     {
-        push_task([task, args...] { task(args...); });
+        push_task([task, args...]
+                  { task(args...); });
     }
 
     /**
@@ -212,10 +214,11 @@ public:
     {
         std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
         std::future<bool> future = promise->get_future();
-        push_task([task, args..., promise] {
-            task(args...);
-            promise->set_value(true);
-        });
+        push_task([task, args..., promise]
+                  {
+                      task(args...);
+                      promise->set_value(true);
+                  });
         return future;
     }
 
@@ -234,7 +237,8 @@ public:
     {
         std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
         std::future<R> future = promise->get_future();
-        push_task([task, args..., promise] { promise->set_value(task(args...)); });
+        push_task([task, args..., promise]
+                  { promise->set_value(task(args...)); });
         return future;
     }
 
@@ -339,7 +343,7 @@ private:
         while (running)
         {
             std::function<void()> task;
-            if (!paused and pop_task(task))
+            if (!paused && pop_task(task))
             {
                 task();
                 tasks_total--;

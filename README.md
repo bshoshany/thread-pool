@@ -75,7 +75,7 @@ As demonstrated in the performance tests [below](#performance-tests), using our 
 
 * **Fast:**
     * Built from scratch with maximum performance in mind.
-    * Suitable for use in high-performance computing clusters with a very large number of CPU cores.
+    * Suitable for use in high-performance computing nodes with a very large number of CPU cores.
     * Compact code, to reduce both compilation time and binary size.
     * Reusing threads avoids the overhead of creating and destroying them for individual tasks.
     * A task queue ensures that there are never more threads running in parallel than allowed by the hardware.
@@ -701,6 +701,8 @@ An interesting point to notice is that for **single-threaded** calculations (1 b
 <a id="markdown-version-history" name="version-history"></a>
 ## Version history
 
+* Version 1.6 (2021-05-26)
+    * Since MSVC does not interpret `and` as `&&` by default, the previous release did not compile with MSVC unless the `/permissive-` or `/Za` compiler flags were used. This has been fixed in this version, and the code now successfully compiles with GCC, Clang, and MSVC. See [this pull request](https://github.com/bshoshany/thread-pool/pull/10).
 * Version 1.5 (2021-05-07)
     * This library now has a DOI for citation purposes. Information on how to cite it in publications has been added to the source code and to `README.md`.
     * Added GitHub badges to `README.md`.
