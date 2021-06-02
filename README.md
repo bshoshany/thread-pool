@@ -701,6 +701,8 @@ An interesting point to notice is that for **single-threaded** calculations (1 b
 <a id="markdown-version-history" name="version-history"></a>
 ## Version history
 
+* Version 1.7 (2021-06-02)
+    * Fixed a bug in `parallelize_loop()` which prevented it from actually running loops in parallel, see [this issue](https://github.com/bshoshany/thread-pool/issues/11).
 * Version 1.6 (2021-05-26)
     * Since MSVC does not interpret `and` as `&&` by default, the previous release did not compile with MSVC unless the `/permissive-` or `/Za` compiler flags were used. This has been fixed in this version, and the code now successfully compiles with GCC, Clang, and MSVC. See [this pull request](https://github.com/bshoshany/thread-pool/pull/10).
 * Version 1.5 (2021-05-07)

@@ -3,8 +3,8 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.6
- * @date 2021-05-26
+ * @version 1.7
+ * @date 2021-06-02
  * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
  *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
@@ -142,10 +142,10 @@ public:
                               loop(i);
                           blocks_running--;
                       });
-            while (blocks_running != 0)
-            {
-                sleep_or_yield();
-            }
+        }
+        while (blocks_running != 0)
+        {
+            sleep_or_yield();
         }
     }
 
