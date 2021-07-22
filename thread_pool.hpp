@@ -362,7 +362,7 @@ private:
     /**
      * @brief A mutex to synchronize access to the task queue by different threads.
      */
-    mutable std::mutex queue_mutex;
+    mutable std::mutex queue_mutex {};
 
     /**
      * @brief An atomic variable indicating to the workers to keep running. When set to false, the workers permanently stop working.
@@ -372,7 +372,7 @@ private:
     /**
      * @brief A queue of tasks to be executed by the threads.
      */
-    std::queue<std::function<void()>> tasks;
+    std::queue<std::function<void()>> tasks {};
 
     /**
      * @brief The number of threads in the pool.
@@ -439,7 +439,7 @@ private:
     /**
      * @brief A mutex to synchronize printing.
      */
-    mutable std::mutex stream_mutex;
+    mutable std::mutex stream_mutex {};
 
     /**
      * @brief The output stream to print to.
