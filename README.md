@@ -6,6 +6,7 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/bshoshany/thread-pool)
 [![GitHub repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=social)](https://github.com/bshoshany/thread-pool)
 [![Twitter @BarakShoshany](https://img.shields.io/twitter/follow/BarakShoshany?style=social)](https://twitter.com/BarakShoshany)
+[![Open in Visual Studio Code](https://open.vscode.dev/badges/open-in-vscode.svg)](https://open.vscode.dev/bshoshany/thread-pool)
 
 # A C++17 Thread Pool for High-Performance Scientific Computing
 
@@ -16,46 +17,39 @@ Department of Physics, Brock University,\
 Companion paper: [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)\
 DOI: [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687)
 
-<!-- TOC depthFrom:2 -->
+* [Abstract](#abstract)
+* [Introduction](#introduction)
+    * [Motivation](#motivation)
+    * [Overview of features](#overview-of-features)
+    * [Compiling and compatibility](#compiling-and-compatibility)
+* [Getting started](#getting-started)
+    * [Including the library](#including-the-library)
+    * [Constructors](#constructors)
+    * [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
+* [Submitting and waiting for tasks](#submitting-and-waiting-for-tasks)
+    * [Submitting tasks to the queue with futures](#submitting-tasks-to-the-queue-with-futures)
+    * [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
+    * [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
+    * [Parallelizing loops](#parallelizing-loops)
+* [Other features](#other-features)
+    * [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
+    * [Setting the worker function's sleep duration](#setting-the-worker-functions-sleep-duration)
+    * [Monitoring the tasks](#monitoring-the-tasks)
+    * [Pausing the workers](#pausing-the-workers)
+* [Exception handling](#exception-handling)
+* [Performance tests](#performance-tests)
+    * [Measuring execution time](#measuring-execution-time)
+    * [AMD Ryzen 9 3900X (24 threads)](#amd-ryzen-9-3900x-24-threads)
+    * [Dual Intel Xeon Gold 6148 (80 threads)](#dual-intel-xeon-gold-6148-80-threads)
+* [Feedback](#feedback)
+* [Copyright and citing](#copyright-and-citing)
 
-- [Abstract](#abstract)
-- [Introduction](#introduction)
-    - [Motivation](#motivation)
-    - [Overview of features](#overview-of-features)
-    - [Compiling and compatibility](#compiling-and-compatibility)
-- [Getting started](#getting-started)
-    - [Including the library](#including-the-library)
-    - [Constructors](#constructors)
-    - [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
-- [Submitting and waiting for tasks](#submitting-and-waiting-for-tasks)
-    - [Submitting tasks to the queue with futures](#submitting-tasks-to-the-queue-with-futures)
-    - [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
-    - [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
-    - [Parallelizing loops](#parallelizing-loops)
-- [Other features](#other-features)
-    - [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
-    - [Setting the worker function's sleep duration](#setting-the-worker-functions-sleep-duration)
-    - [Monitoring the tasks](#monitoring-the-tasks)
-    - [Pausing the workers](#pausing-the-workers)
-- [Performance tests](#performance-tests)
-    - [Measuring execution time](#measuring-execution-time)
-    - [AMD Ryzen 9 3900X (24 threads)](#amd-ryzen-9-3900x-24-threads)
-    - [Dual Intel Xeon Gold 6148 (80 threads)](#dual-intel-xeon-gold-6148-80-threads)
-- [Version history](#version-history)
-- [Feedback](#feedback)
-- [Copyright and citing](#copyright-and-citing)
-
-<!-- /TOC -->
-
-<a id="markdown-abstract" name="abstract"></a>
 ## Abstract
 
 We present a modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, our implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. This paper provides motivation, detailed usage instructions, and performance tests. The code is freely available in the [GitHub repository](https://github.com/bshoshany/thread-pool). This `README.md` file contains roughly the same content as the [companion paper](https://arxiv.org/abs/2105.00613).
 
-<a id="markdown-introduction" name="introduction"></a>
 ## Introduction
 
-<a id="markdown-motivation" name="motivation"></a>
 ### Motivation
 
 Multithreading is essential for modern high-performance computing. Since C++11, the C++ standard library has included built-in low-level multithreading support using constructs such as `std::thread`. However, `std::thread` creates a new thread each time it is called, which can have a significant performance overhead. Furthermore, it is possible to create more threads than the hardware can handle simultaneously, potentially resulting in a substantial slowdown.
@@ -70,7 +64,6 @@ High-level multithreading APIs, such as OpenMP, allow simple one-line automatic 
 
 As demonstrated in the performance tests [below](#performance-tests), using our thread pool class we were able to saturate the upper bound of expected speedup for matrix multiplication and generation of random matrices. These performance tests were performed on 12-core / 24-thread and 40-core / 80-thread systems using GCC on Linux.
 
-<a id="markdown-overview-of-features" name="overview-of-features"></a>
 ### Overview of features
 
 * **Fast:**
@@ -96,10 +89,10 @@ As demonstrated in the performance tests [below](#performance-tests), using our 
     * Fine-tune the sleep duration of each thread's worker function for optimal performance.
     * Monitor the number of queued and/or running tasks.
     * Pause and resume popping new tasks out of the queue.
+    * Catch exceptions thrown by the submitted tasks.
     * Synchronize output to a stream from multiple threads in parallel using the `synced_stream` helper class.
     * Easily measure execution time for benchmarking purposes using the `timer` helper class.
 
-<a id="markdown-compiling-and-compatibility" name="compiling-and-compatibility"></a>
 ### Compiling and compatibility
 
 This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems for which such a compiler is available. Compatibility was verified with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz using the following compilers and platforms:
@@ -116,10 +109,8 @@ In addition, this library was tested on a [Compute Canada](https://www.computeca
 
 As this library requires C++17 features, the code must be compiled with C++17 support. For GCC, Clang, and ICC, use the `-std=c++17` flag. For MSVC, use `/std:c++17`. On Linux, you will also need to use the `-pthread` flag with GCC, Clang, or ICC to enable the POSIX threads library.
 
-<a id="markdown-getting-started" name="getting-started"></a>
 ## Getting started
 
-<a id="markdown-including-the-library" name="including-the-library"></a>
 ### Including the library
 
 To use the thread pool library, simply include the header file:
@@ -130,7 +121,6 @@ To use the thread pool library, simply include the header file:
 
 The thread pool will now be accessible via the `thread_pool` class.
 
-<a id="markdown-constructors" name="constructors"></a>
 ### Constructors
 
 The default constructor creates a thread pool with as many threads as the hardware can handle concurrently, as reported by the implementation via `std::thread::hardware_concurrency()`. With a hyperthreaded CPU, this will be twice the number of CPU cores. This is probably the constructor you want to use. For example:
@@ -151,7 +141,6 @@ If your program's main thread only submits tasks to the thread pool and waits fo
 
 However, if your main thread does perform computationally intensive tasks on its own, then it is recommended to use the value `std::thread::hardware_concurrency() - 1` for the number of threads. In this case, the main thread plus the thread pool will together take up exactly all the threads available in the hardware.
 
-<a id="markdown-getting-and-resetting-the-number-of-threads-in-the-pool" name="getting-and-resetting-the-number-of-threads-in-the-pool"></a>
 ### Getting and resetting the number of threads in the pool
 
 The member function `get_thread_count()` returns the number of threads in the pool. This will be equal to `std::thread::hardware_concurrency()` if the default constructor was used.
@@ -160,10 +149,8 @@ It is generally unnecessary to change the number of threads in the pool after it
 
 `reset()` will wait for all currently running tasks to be completed, but will leave the rest of the tasks in the queue. Then it will destroy the thread pool and create a new one with the desired new number of threads, as specified in the function's argument (or the hardware concurrency if no argument is given). The new thread pool will then resume executing the tasks that remained in the queue and any new submitted tasks.
 
-<a id="markdown-submitting-and-waiting-for-tasks" name="submitting-and-waiting-for-tasks"></a>
 ## Submitting and waiting for tasks
 
-<a id="markdown-submitting-tasks-to-the-queue-with-futures" name="submitting-tasks-to-the-queue-with-futures"></a>
 ### Submitting tasks to the queue with futures
 
 A task can be any function, with zero or more arguments, and with or without a return value. Once a task has been submitted to the queue, it will be executed as soon as a thread becomes available. Tasks are executed in the order that they were submitted (first-in, first-out).
@@ -195,7 +182,6 @@ do_stuff();
 auto my_return_value = my_future.get();
 ```
 
-<a id="markdown-submitting-tasks-to-the-queue-without-futures" name="submitting-tasks-to-the-queue-without-futures"></a>
 ### Submitting tasks to the queue without futures
 
 Usually, it is best to submit a task to the queue using `submit()`. This allows you to wait for the task to finish and/or get its return value later. However, sometimes a future is not needed, for example when you just want to "set and forget" a certain task, or if the task already communicates with the main thread or with other tasks without using futures, such as via references or pointers. In such cases, you may wish to avoid the overhead involved in assigning a future to the task in order to increase performance.
@@ -211,7 +197,6 @@ pool.push_task(task, arg);
 pool.push_task(task, arg1, arg2);
 ```
 
-<a id="markdown-manually-waiting-for-all-tasks-to-complete" name="manually-waiting-for-all-tasks-to-complete"></a>
 ### Manually waiting for all tasks to complete
 
 To wait for a **single** submitted task to complete, use `submit()` and then use the `wait()` or `get()` member functions of the obtained future. However, in cases where you need to wait until **all** submitted tasks finish their execution, or if the tasks have been submitted without futures using `push_task()`, you can use the member function `wait_for_tasks()`.
@@ -234,7 +219,6 @@ pool.wait_for_tasks();
 
 after the `for` loop will ensure - as efficiently as possible - that all tasks have finished running before we attempt to access any elements of the array `a`, and the code will print out the value `2500` as expected. (Note, however, that `wait_for_tasks()` will wait for **all** the tasks in the queue, including those that are unrelated to the `for` loop. Using `parallelize_loop()` would make much more sense in this particular case, as it will wait only for the tasks related to the loop.)
 
-<a id="markdown-parallelizing-loops" name="parallelizing-loops"></a>
 ### Parallelizing loops
 
 Consider the following loop:
@@ -291,10 +275,8 @@ The output should be:
 32^2 = 1024
 ```
 
-<a id="markdown-other-features" name="other-features"></a>
 ## Other features
 
-<a id="markdown-synchronizing-printing-to-an-output-stream" name="synchronizing-printing-to-an-output-stream"></a>
 ### Synchronizing printing to an output stream
 
 When printing to an output stream from multiple threads in parallel, the output may become garbled. For example, consider this code:
@@ -353,7 +335,6 @@ Task no. 5 executing.
 
 **Warning:** Always create the `synced_stream` object **before** the `thread_pool` object, as we did in this example. When the `thread_pool` object goes out of scope, it waits for the remaining tasks to be executed. If the `synced_stream` object goes out of scope before the `thread_pool` object, then any tasks using the `synced_stream` will crash. Since objects are destructed in the opposite order of construction, creating the `synced_stream` object before the `thread_pool` object ensures that the `synced_stream` is always available to the tasks, even while the pool is destructing.
 
-<a id="markdown-setting-the-worker-functions-sleep-duration" name="setting-the-worker-functions-sleep-duration"></a>
 ### Setting the worker function's sleep duration
 
 The **worker function** is the function that controls the execution of tasks by each thread. It loops continuously, and with each iteration of the loop, checks if there are any tasks in the queue. If it finds a task, it pops it out of the queue and executes it. If it does not find a task, it will wait for a bit, by calling `std::this_thread::sleep_for()`, and then check the queue again. The public member variable `sleep_duration` controls the duration, in microseconds, that the worker function sleeps for when it cannot find a task in the queue.
@@ -366,7 +347,6 @@ However, please note that this value is likely unique to the particular system o
 
 If `sleep_duration` is set to `0`, then the worker function will execute `std::this_thread::yield()` instead of sleeping if there are no tasks in the queue. This will suggest to the OS that it should put this thread on hold and allow other threads to run instead. However, this also causes the worker functions to have high CPU usage when idle. On the other hand, for some applications this setting may provide better performance than sleeping - again, do your own benchmarks and find what works best for you.
 
-<a id="markdown-monitoring-the-tasks" name="monitoring-the-tasks"></a>
 ### Monitoring the tasks
 
 Sometimes you may wish to monitor what is happening with the tasks you submitted to the pool. This may be done using three member functions:
@@ -434,7 +414,6 @@ Task 11 done.
 0 tasks total, 0 tasks running, 0 tasks queued.
 ```
 
-<a id="markdown-pausing-the-workers" name="pausing-the-workers"></a>
 ### Pausing the workers
 
 Sometimes you may wish to temporarily pause the execution of tasks, or perhaps you want to submit tasks to the queue but only start executing them at a later time. You can do this using the public member variable `paused`.
@@ -576,10 +555,45 @@ The first `wait_for_tasks()`, which was called with `paused == false`, waited fo
 
 **Warning**: If the thread pool is destroyed while paused, any tasks still in the queue will never be executed.
 
-<a id="markdown-performance-tests" name="performance-tests"></a>
+## Exception handling
+
+`submit()` catches any exceptions thrown by the submitted task and forwards them to the corresponding future. They can then be caught when invoking the `get()` member function of the future. For example:
+
+```cpp
+#include "thread_pool.hpp"
+
+double inverse(const double &x)
+{
+    if (x == 0)
+        throw std::runtime_error("Division by zero!");
+    else
+        return 1 / x;
+}
+
+int main()
+{
+    thread_pool pool;
+    auto my_future = pool.submit(inverse, 0);
+    try
+    {
+        double result = my_future.get();
+        std::cout << "The result is: " << result << '\n';
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << "Caught exception: " << e.what() << '\n';
+    }
+}
+```
+
+The output will be:
+
+```none
+Caught exception: Division by zero!
+```
+
 ## Performance tests
 
-<a id="markdown-measuring-execution-time" name="measuring-execution-time"></a>
 ### Measuring execution time
 
 If you are using a thread pool, then your code is most likely performance-critical. Achieving maximum performance requires performing a considerable amount of benchmarking to determine the optimal settings and algorithms. Therefore, it is important to be able to measure the execution time of various computations under different conditions. In the context of the thread pool class, you would probably be interested in finding the optimal number of threads in the pool and the optimal sleep duration for the worker functions.
@@ -605,7 +619,6 @@ To benchmark the performance of our thread pool class, we measured the execution
 
 For each matrix operation, we parallelized the computation into blocks. Each block consists of a number of atomic operations equal to the block size, and was submitted as a separate task to the thread pool's queue, such that the number of blocks equals the total number of tasks. We tested 6 different block sizes for each operation in order to compare their execution time.
 
-<a id="markdown-amd-ryzen-9-3900x-24-threads" name="amd-ryzen-9-3900x-24-threads"></a>
 ### AMD Ryzen 9 3900X (24 threads)
 
 The first test was performed on a computer equipped with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz, compiled using GCC v10.3.0 on Ubuntu 21.04 with the `-O3` compiler flag. The thread pool consisted of 24 threads, making full use of the CPU's hyperthreading capabilities.
@@ -653,7 +666,6 @@ In this test, we find a speedup by roughly a factor of 2 for addition, 9 for tra
 * Transposition also enjoys a factor of 9 speedup with multithreading. Note that transposition requires reading memory is non-sequential order, jumping between the rows of the source matrix, which is why, compared to sequential operations such as addition, it is much slower when single-threaded, but benefits more from multithreading, especially when split into smaller blocks.
 * Even though the test CPU only has 24 threads, there is still a small but consistent benefit to dividing the computation into 48 or even 96 parallel blocks. This is especially significant in multiplication, where we get roughly a 25% speedup with 96 blocks (4 blocks per thread) compared to 24 blocks (1 block per thread).
 
-<a id="markdown-dual-intel-xeon-gold-6148-80-threads" name="dual-intel-xeon-gold-6148-80-threads"></a>
 ### Dual Intel Xeon Gold 6148 (80 threads)
 
 The second test was performed on a [Compute Canada](https://www.computecanada.ca/) node equipped with dual 20-core / 40-thread Intel Xeon Gold 6148 CPUs at 2.4 GHz, for a total of 40 cores and 80 threads, compiled using GCC v9.2.0 on CentOS Linux 7.6.1810 with the `-O3` compiler flag. The thread pool consisted of 80 threads, making full use of the hyperthreading capabilities of both CPUs.
@@ -698,51 +710,10 @@ In this test, we find a speedup by roughly a factor of 10 for addition, 19 for t
 
 An interesting point to notice is that for **single-threaded** calculations (1 block), the dual Xeon CPUs actually perform worse by up to a factor of 2 compared to the single Ryzen CPU. This is due to the base clock speed of the Ryzen (3.8 GHz) being considerably higher than the base clock speed of the Xeon (2.4 GHz). Since each core of the Xeon is slower than each core of the Ryzen, we need more parallelization to achieve the same overall speed. However, with full parallelization (24 threads on the Ryzen, 80 threads on the Xeon), the latter is faster by about a factor of 2.
 
-<a id="markdown-version-history" name="version-history"></a>
-## Version history
-
-* Version 1.7 (2021-06-02)
-    * Fixed a bug in `parallelize_loop()` which prevented it from actually running loops in parallel, see [this issue](https://github.com/bshoshany/thread-pool/issues/11).
-* Version 1.6 (2021-05-26)
-    * Since MSVC does not interpret `and` as `&&` by default, the previous release did not compile with MSVC unless the `/permissive-` or `/Za` compiler flags were used. This has been fixed in this version, and the code now successfully compiles with GCC, Clang, and MSVC. See [this pull request](https://github.com/bshoshany/thread-pool/pull/10).
-* Version 1.5 (2021-05-07)
-    * This library now has a DOI for citation purposes. Information on how to cite it in publications has been added to the source code and to `README.md`.
-    * Added GitHub badges to `README.md`.
-* Version 1.4 (2021-05-05)
-    * Added three new public member functions to monitor the tasks submitted to the pool:
-        * `get_tasks_queued()` gets the number of tasks currently waiting in the queue to be executed by the threads.
-        * `get_tasks_running()` gets the number of tasks currently being executed by the threads.
-        * `get_tasks_total()` gets the total number of unfinished tasks - either still in the queue, or running in a thread.
-        * Note that `get_tasks_running() == get_tasks_total() - get_tasks_queued()`.
-        * Renamed the private member variable `tasks_waiting` to `tasks_total` to make its purpose clearer.
-    * Added an option to temporarily pause the workers:
-        * When public member variable `paused` is set to `true`, the workers temporarily stop popping new tasks out of the queue, although any tasks already executed will keep running until they are done. Set to `false` again to resume popping tasks.
-        * While the workers are paused, `wait_for_tasks()` will wait for the running tasks instead of all tasks (otherwise it would wait forever).
-        * By utilizing the new pausing mechanism, `reset()` can now change the number of threads on-the-fly while there are still tasks waiting in the queue. The new thread pool will resume executing tasks from the queue once it is created.
-    * `parallelize_loop()` and `wait_for_tasks()` now have the same behavior as the worker function with regards to waiting for tasks to complete. If the relevant tasks are not yet complete, then before checking again, they will sleep for `sleep_duration` microseconds, unless that variable is set to zero, in which case they will call `std::this_thread::yield()`. This should improve performance and reduce CPU usage.
-    * Merged [this commit](https://github.com/bshoshany/thread-pool/pull/8): Fixed weird error when using MSVC and including `windows.h`.
-    * The `README.md` file has been reorganized and expanded.
-* Version 1.3 (2021-05-03)
-    * Fixed [this issue](https://github.com/bshoshany/thread-pool/issues/3): Removed `std::move` from the `return` statement in `push_task()`. This previously generated a `-Wpessimizing-move` warning in Clang. The assembly code generated by the compiler seems to be the same before and after this change, presumably because the compiler eliminates the `std::move` automatically, but this change gets rid of the Clang warning.
-    * Fixed [this issue](https://github.com/bshoshany/thread-pool/issues/5): Removed a debugging message printed to `std::cout`, which was left in the code by mistake.
-    * Fixed [this issue](https://github.com/bshoshany/thread-pool/issues/6): `parallelize_loop()` no longer sends references for the variables `start` and `stop` when calling `push_task()`, which may lead to undefined behavior.
-    * A companion paper is now published at <a href="https://arxiv.org/abs/2105.00613">arXiv:2105.00613</a>, including additional information such as performance tests on systems with up to 80 hardware threads. The `README.md` has been updated, and it is now roughly identical in content to the paper.
-* Version 1.2 (2021-04-29)
-    * The worker function, which controls the execution of tasks by each thread, now sleeps by default instead of yielding. Previously, when the worker could not find any tasks in the queue, it called `std::this_thread::yield()` and then tried again. However, this caused the workers to have high CPU usage when idle, [as reported by some users](https://github.com/bshoshany/thread-pool/issues/1). Now, when the worker function cannot find a task to run, it instead sleeps for a duration given by the public member variable `sleep_duration` (in microseconds) before checking the queue again. The default value is `1000` microseconds, which I found to be optimal in terms of both CPU usage and performance, but your own optimal value may be different.
-    * If the constructor is called with an argument of zero for the number of threads, then the default value, `std::thread::hardware_concurrency()`, is used instead.
-    * Added a simple helper class, `timer`, which can be used to measure execution time for benchmarking purposes.
-    * Improved and expanded the documentation.
-* Version 1.1 (2021-04-24)
-    * Cosmetic changes only. Fixed a typo in the Doxygen comments and added a link to the GitHub repository.
-* Version 1.0 (2021-01-15)
-    * Initial release.
-
-<a id="markdown-feedback" name="feedback"></a>
 ## Feedback
 
 If you would like a request any additional features, or if you encounter any bugs, please feel free to [open a new issue](https://github.com/bshoshany/thread-pool/issues)!
 
-<a id="markdown-copyright-and-citing" name="copyright-and-citing"></a>
 ## Copyright and citing
 
 Copyright (c) 2021 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).

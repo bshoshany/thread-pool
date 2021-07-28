@@ -3,13 +3,13 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.7
- * @date 2021-06-02
+ * @version 1.8
+ * @date 2021-07-28
  * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
  *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief A C++17 thread pool for high-performance scientific computing.
- * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository for documentation and updates, or to submit feature requests and bug reports.
+ * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
  */
 
 #include <atomic>      // std::atomic
@@ -212,12 +212,25 @@ public:
     template <typename F, typename... A, typename = std::enable_if_t<std::is_void_v<std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>>>
     std::future<bool> submit(const F &task, const A &...args)
     {
-        std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
-        std::future<bool> future = promise->get_future();
-        push_task([task, args..., promise]
+        std::shared_ptr<std::promise<bool>> task_promise(new std::promise<bool>);
+        std::future<bool> future = task_promise->get_future();
+        push_task([task, args..., task_promise]
                   {
-                      task(args...);
-                      promise->set_value(true);
+                      try
+                      {
+                          task(args...);
+                          task_promise->set_value(true);
+                      }
+                      catch (...)
+                      {
+                          try
+                          {
+                              task_promise->set_exception(std::current_exception());
+                          }
+                          catch (...)
+                          {
+                          }
+                      }
                   });
         return future;
     }
@@ -235,10 +248,25 @@ public:
     template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>, typename = std::enable_if_t<!std::is_void_v<R>>>
     std::future<R> submit(const F &task, const A &...args)
     {
-        std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
-        std::future<R> future = promise->get_future();
-        push_task([task, args..., promise]
-                  { promise->set_value(task(args...)); });
+        std::shared_ptr<std::promise<R>> task_promise(new std::promise<R>);
+        std::future<R> future = task_promise->get_future();
+        push_task([task, args..., task_promise]
+                  {
+                      try
+                      {
+                          task_promise->set_value(task(args...));
+                      }
+                      catch (...)
+                      {
+                          try
+                          {
+                              task_promise->set_exception(std::current_exception());
+                          }
+                          catch (...)
+                          {
+                          }
+                      }
+                  });
         return future;
     }
 
@@ -362,7 +390,7 @@ private:
     /**
      * @brief A mutex to synchronize access to the task queue by different threads.
      */
-    mutable std::mutex queue_mutex;
+    mutable std::mutex queue_mutex = {};
 
     /**
      * @brief An atomic variable indicating to the workers to keep running. When set to false, the workers permanently stop working.
@@ -372,7 +400,7 @@ private:
     /**
      * @brief A queue of tasks to be executed by the threads.
      */
-    std::queue<std::function<void()>> tasks;
+    std::queue<std::function<void()>> tasks = {};
 
     /**
      * @brief The number of threads in the pool.
@@ -439,7 +467,7 @@ private:
     /**
      * @brief A mutex to synchronize printing.
      */
-    mutable std::mutex stream_mutex;
+    mutable std::mutex stream_mutex = {};
 
     /**
      * @brief The output stream to print to.
