@@ -2,6 +2,8 @@
 
 ## Version history
 
+* v1.9 (2021-07-29)
+    * Fixed a bug in `reset()` which caused it to create the wrong number of threads.
 * v1.8 (2021-07-28)
     * The version history has become too long to be included in `README.md`, so I moved it to a separate file, `CHANGELOG.md`.
     * A button to open this repository directly in Visual Studio Code has been added to the badges in `README.md`.
