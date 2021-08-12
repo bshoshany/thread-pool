@@ -23,6 +23,7 @@ DOI: [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687)
     * [Overview of features](#overview-of-features)
     * [Compiling and compatibility](#compiling-and-compatibility)
 * [Getting started](#getting-started)
+    * [Using vcpkg](#using-vcpkg) 
     * [Including the library](#including-the-library)
     * [Constructors](#constructors)
     * [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
@@ -110,6 +111,18 @@ In addition, this library was tested on a [Compute Canada](https://www.computeca
 As this library requires C++17 features, the code must be compiled with C++17 support. For GCC, Clang, and ICC, use the `-std=c++17` flag. For MSVC, use `/std:c++17`. On Linux, you will also need to use the `-pthread` flag with GCC, Clang, or ICC to enable the POSIX threads library.
 
 ## Getting started
+
+### Using vcpkg
+
+You can download and install `bshoshany-thread-pool` using the [vcpkg](https://github.com/Microsoft/vcpkg) dependency manager:
+
+    git clone https://github.com/Microsoft/vcpkg.git
+    cd vcpkg
+    ./bootstrap-vcpkg.sh
+    ./vcpkg integrate install
+    vcpkg install bshoshany-thread-pool
+
+The `bshoshany-thread-pool` port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
 
 ### Including the library
 
