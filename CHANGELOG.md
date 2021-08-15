@@ -2,6 +2,15 @@
 
 ## Version history
 
+* v2.0.0 (2021-08-14)
+    * From now on, version numbers will adhere to the [Semantic Versioning](https://semver.org/) specification in the format **major.minor.patch**.
+    * A file named `thread_pool_test.cpp` has been added to the package. It will perform automated tests of all aspects of the package, and benchmark some multithreaded matrix operations. Please run it on your system and [submit a bug report](https://github.com/bshoshany/thread-pool/issues) if any of the tests fail. In addition, the code is thoroughly documented, and is meant to serve as an extensive example of how to properly use the package.
+    * The package is now available through [vcpkg](https://github.com/microsoft/vcpkg). Instructions for how to install it have been added to `README.md`. See [this pull request](https://github.com/bshoshany/thread-pool/pull/18).
+    * The package now defines a macro `THREAD_POOL_VERSION`, which returns the version number and release date of the thread pool library as a string.
+    * `parallelize_loop()` has undergone some major changes (and is now incompatible with v1.x):
+        * The second argument is now the index **after** the last index, instead of the last index itself. This is more consistent with C++ conventions (e.g. standard library algorithms) where the range is always `[first, last)`. For example, for an array with `n` indices, instead of `parallelize_loop(0, n - 1, ...)` you should now write `parallelize_loop(0, n, ...)`.
+        * The `loop` function is now only called once per block, instead of once per index, as was the case before. This should provide a performance boost due to significantly reducing the number of function calls, and it also allows you to conserve resources by using them only once per block instead of once per index (an example can be found in the `random_matrix_generator` class in `thread_pool_test.cpp`). It also means that `loop` now takes two arguments: the first index in the block and the index after the last index in the block. Thus, `loop(start, end)` should typically involve a loop of the form `for (T i = start; i < end; i++)`.
+        * The first and last indices can now be of two different integer types. Previously, `parallelize_loop(0, i, ...)` did not work if `i` was not an `int`, because `0` was interpreted as `int`, and the two arguments had to be of the same type. Therefore, one had to use casting, e.g. `parallelize_loop((size_t)0, i)`, to make it work. Now this is no longer necessary; the common type is inferred automatically using `std::common_type_t`.
 * v1.9 (2021-07-29)
     * Fixed a bug in `reset()` which caused it to create the wrong number of threads.
 * v1.8 (2021-07-28)

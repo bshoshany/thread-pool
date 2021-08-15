@@ -3,8 +3,8 @@
 /**
  * @file thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 1.9
- * @date 2021-07-29
+ * @version 2.0.0
+ * @date 2021-08-14
  * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
  *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
@@ -12,7 +12,7 @@
  * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
  */
 
-#define THREAD_POOL_VERSION 1.9
+#define THREAD_POOL_VERSION "v2.0.0 (2021-08-14)"
 
 #include <atomic>      // std::atomic
 #include <chrono>      // std::chrono
@@ -24,8 +24,8 @@
 #include <mutex>       // std::mutex, std::scoped_lock
 #include <queue>       // std::queue
 #include <thread>      // std::this_thread, std::thread
-#include <type_traits> // std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
-#include <utility>     // std::move, std::swap
+#include <type_traits> // std::common_type_t, std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
+#include <utility>     // std::move
 
 // ============================================================================================= //
 //                                    Begin class thread_pool                                    //
@@ -36,6 +36,7 @@
 class thread_pool
 {
     typedef std::uint_fast32_t ui32;
+    typedef std::uint_fast64_t ui64;
 
 public:
     // ============================
@@ -72,7 +73,7 @@ public:
      *
      * @return The number of queued tasks.
      */
-    size_t get_tasks_queued() const
+    ui64 get_tasks_queued() const
     {
         const std::scoped_lock lock(queue_mutex);
         return tasks.size();
@@ -109,39 +110,49 @@ public:
     }
 
     /**
-     * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the thread pool, and waiting for all blocks to finish executing. The loop will be equivalent to: for (T i = first_index; i <= last_index; i++) loop(i);
+     * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the thread pool, and waiting for all blocks to finish executing. The user supplies a loop function, which will be called once per block and should iterate over the block's range.
      *
-     * @tparam T The type of the loop index. Should be a signed or unsigned integer.
+     * @tparam T1 The type of the first index in the loop. Should be a signed or unsigned integer.
+     * @tparam T2 The type of the index after the last index in the loop. Should be a signed or unsigned integer. If T1 is not the same as T2, a common type will be automatically inferred.
      * @tparam F The type of the function to loop through.
-     * @param first_index The first index in the loop (inclusive).
-     * @param last_index The last index in the loop (inclusive).
-     * @param loop The function to loop through. Should take exactly one argument, the loop index.
-     * @param num_tasks The maximum number of tasks to split the loop into. The default is to use the number of threads in the pool.
+     * @param first_index The first index in the loop.
+     * @param index_after_last The index after the last index in the loop. The loop will iterate from first_index to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = first_index; i < index_after_last; i++)". Note that if first_index == index_after_last, the function will terminate without doing anything.
+     * @param loop The function to loop through. Will be called once per block. Should take exactly two arguments: the first index in the block and the index after the last index in the block. loop(start, end) should typically involve a loop of the form "for (T i = start; i < end; i++)".
+     * @param num_blocks The maximum number of blocks to split the loop into. The default is to use the number of threads in the pool.
      */
-    template <typename T, typename F>
-    void parallelize_loop(T first_index, T last_index, const F &loop, ui32 num_tasks = 0)
+    template <typename T1, typename T2, typename F>
+    void parallelize_loop(const T1 &first_index, const T2 &index_after_last, const F &loop, ui32 num_blocks = 0)
     {
-        if (num_tasks == 0)
-            num_tasks = thread_count;
-        if (last_index < first_index)
-            std::swap(last_index, first_index);
-        size_t total_size = last_index - first_index + 1;
-        size_t block_size = total_size / num_tasks;
+        typedef std::common_type_t<T1, T2> T;
+        T the_first_index = (T)first_index;
+        T last_index = (T)index_after_last;
+        if (the_first_index == last_index)
+            return;
+        if (last_index < the_first_index)
+        {
+            T temp = last_index;
+            last_index = the_first_index;
+            the_first_index = temp;
+        }
+        last_index--;
+        if (num_blocks == 0)
+            num_blocks = thread_count;
+        ui64 total_size = (ui64)(last_index - the_first_index + 1);
+        ui64 block_size = (ui64)(total_size / num_blocks);
         if (block_size == 0)
         {
             block_size = 1;
-            num_tasks = (ui32)total_size > 1 ? (ui32)total_size : 1;
+            num_blocks = (ui32)total_size > 1 ? (ui32)total_size : 1;
         }
         std::atomic<ui32> blocks_running = 0;
-        for (ui32 t = 0; t < num_tasks; t++)
+        for (ui32 t = 0; t < num_blocks; t++)
         {
-            T start = (T)(t * block_size + first_index);
-            T end = (t == num_tasks - 1) ? last_index : (T)((t + 1) * block_size + first_index - 1);
+            T start = ((T)(t * block_size) + the_first_index);
+            T end = (t == num_blocks - 1) ? last_index + 1 : ((T)((t + 1) * block_size) + the_first_index);
             blocks_running++;
             push_task([start, end, &loop, &blocks_running]
                       {
-                          for (T i = start; i <= end; i++)
-                              loop(i);
+                          loop(start, end);
                           blocks_running--;
                       });
         }
