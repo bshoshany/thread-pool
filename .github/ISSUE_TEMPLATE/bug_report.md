@@ -1,9 +1,9 @@
 ---
 name: Bug report
-about: Create a report to help improve the library
+about: Found a bug? Report it here.
 title: "[BUG]"
-labels: ''
-assignees: ''
+labels: bug
+assignees: bshoshany
 
 ---
 
@@ -33,3 +33,5 @@ What behavior did you expect to get? What actually happened? If the code failed 
 (Please note that only the latest version of the thread pool library is supported.)
 
 **Additional information**
+
+Include any additional information here.
