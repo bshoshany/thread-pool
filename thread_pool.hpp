@@ -75,8 +75,8 @@ public:
      */
     ui64 get_tasks_queued() const
     {
-        const std::scoped_lock lock(queue_mutex);
-        return tasks.size();
+        const std::scoped_lock lock(tasks_mutex);
+        return get_tasks_queued_unprotected();
     }
 
     /**
@@ -86,7 +86,8 @@ public:
      */
     ui32 get_tasks_running() const
     {
-        return tasks_total - (ui32)get_tasks_queued();
+        const std::scoped_lock lock(tasks_mutex);
+        return get_tasks_running_unprotected();
     }
 
     /**
@@ -96,7 +97,8 @@ public:
      */
     ui32 get_tasks_total() const
     {
-        return tasks_total;
+        const std::scoped_lock lock(tasks_mutex);
+        return get_tasks_total_unprotected();
     }
 
     /**
@@ -144,22 +146,24 @@ public:
             block_size = 1;
             num_blocks = (ui32)total_size > 1 ? (ui32)total_size : 1;
         }
-        std::atomic<ui32> blocks_running = 0;
+        ui32 blocks_running = num_blocks;
+        std::mutex blocks_running_mutex;
+        std::condition_variable loop_done_condition_variable;
         for (ui32 t = 0; t < num_blocks; t++)
         {
             T start = ((T)(t * block_size) + the_first_index);
             T end = (t == num_blocks - 1) ? last_index + 1 : ((T)((t + 1) * block_size) + the_first_index);
-            blocks_running++;
-            push_task([start, end, &loop, &blocks_running]
+            push_task([start, end, &loop, &blocks_running, &blocks_running_mutex, &loop_done_condition_variable]
                       {
                           loop(start, end);
-                          blocks_running--;
+                          std::scoped_lock lock(blocks_running_mutex);
+                          if (--blocks_running == 0) {
+                            loop_done_condition_variable.notify_one();
+                          }
                       });
         }
-        while (blocks_running != 0)
-        {
-            sleep_or_yield();
-        }
+        std::unique_lock<std::mutex> lock(blocks_running_mutex);
+        loop_done_condition_variable.wait(lock, [&]{ return blocks_running == 0; });
     }
 
     /**
@@ -171,11 +175,12 @@ public:
     template <typename F>
     void push_task(const F &task)
     {
-        tasks_total++;
         {
-            const std::scoped_lock lock(queue_mutex);
+            const std::scoped_lock lock(tasks_mutex);
             tasks.push(std::function<void()>(task));
+            tasks_total++;
         }
+        task_available_condition_variable.notify_one();
     }
 
     /**
@@ -201,14 +206,16 @@ public:
      */
     void reset(const ui32 &_thread_count = std::thread::hardware_concurrency())
     {
-        bool was_paused = paused;
-        paused = true;
+        const bool was_paused = paused;
+        pause();
         wait_for_tasks();
         running = false;
         destroy_threads();
         thread_count = _thread_count ? _thread_count : std::thread::hardware_concurrency();
         threads.reset(new std::thread[thread_count]);
-        paused = was_paused;
+        if (!was_paused) {
+          resume();
+        }
         running = true;
         create_threads();
     }
@@ -288,35 +295,33 @@ public:
      */
     void wait_for_tasks()
     {
-        while (true)
-        {
+        std::unique_lock<std::mutex> lock(tasks_mutex);
+        tasks_done_condition_variable.wait(lock, [&]{
             if (!paused)
             {
-                if (tasks_total == 0)
-                    break;
+                return (tasks_total == 0);
             }
             else
             {
-                if (get_tasks_running() == 0)
-                    break;
+                return (get_tasks_running_unprotected() == 0);
             }
-            sleep_or_yield();
-        }
+        });
     }
 
-    // ===========
-    // Public data
-    // ===========
+    /**
+     * @brief Tell the workers to pause work. The workers temporarily stop popping new tasks out of the queue, although any tasks already being executed will keep running until they are done.
+     */
+    void pause() {
+      paused = true;
+    }
 
     /**
-     * @brief An atomic variable indicating to the workers to pause. When set to true, the workers temporarily stop popping new tasks out of the queue, although any tasks already executed will keep running until they are done. Set to false again to resume popping tasks.
+     * @brief Tell the workers to resume popping new tasks out of the queue.
      */
-    std::atomic<bool> paused = false;
-
-    /**
-     * @brief The duration, in microseconds, that the worker function should sleep for when it cannot find any tasks in the queue. If set to 0, then instead of sleeping, the worker function will execute std::this_thread::yield() if there are no tasks in the queue. The default value is 1000.
-     */
-    ui32 sleep_duration = 1000;
+    void resume() {
+      paused = false;
+      task_available_condition_variable.notify_all();
+    }
 
 private:
     // ========================
@@ -339,41 +344,12 @@ private:
      */
     void destroy_threads()
     {
+        // Wake up all threads so that they may exit
+        task_available_condition_variable.notify_all();
         for (ui32 i = 0; i < thread_count; i++)
         {
             threads[i].join();
         }
-    }
-
-    /**
-     * @brief Try to pop a new task out of the queue.
-     *
-     * @param task A reference to the task. Will be populated with a function if the queue is not empty.
-     * @return true if a task was found, false if the queue is empty.
-     */
-    bool pop_task(std::function<void()> &task)
-    {
-        const std::scoped_lock lock(queue_mutex);
-        if (tasks.empty())
-            return false;
-        else
-        {
-            task = std::move(tasks.front());
-            tasks.pop();
-            return true;
-        }
-    }
-
-    /**
-     * @brief Sleep for sleep_duration microseconds. If that variable is set to zero, yield instead.
-     *
-     */
-    void sleep_or_yield()
-    {
-        if (sleep_duration)
-            std::this_thread::sleep_for(std::chrono::microseconds(sleep_duration));
-        else
-            std::this_thread::yield();
     }
 
     /**
@@ -383,17 +359,53 @@ private:
     {
         while (running)
         {
-            std::function<void()> task;
-            if (!paused && pop_task(task))
+            std::unique_lock<std::mutex> lock(tasks_mutex);
+            task_available_condition_variable.wait(lock, [&]{ return !tasks.empty() || !running; });
+            if (running && !paused)
             {
+                auto task = std::move(tasks.front());
+                tasks.pop();
+                lock.unlock();
+
                 task();
-                tasks_total--;
-            }
-            else
-            {
-                sleep_or_yield();
+
+                lock.lock();
+                --tasks_total;
+                lock.unlock();
+
+                tasks_done_condition_variable.notify_one();
             }
         }
+    }
+
+    /**
+     * @brief Get the number of tasks currently waiting in the queue to be executed by the threads. This function expects that the caller has secured the mutex
+     *
+     * @return The number of queued tasks.
+     */
+    inline ui64 get_tasks_queued_unprotected() const
+    {
+        return tasks.size();
+    }
+
+    /**
+     * @brief Get the number of tasks currently being executed by the threads. This function expects that the caller has secured the mutex
+     *
+     * @return The number of running tasks.
+     */
+    inline ui32 get_tasks_running_unprotected() const
+    {
+        return tasks_total - (ui32)get_tasks_queued_unprotected();
+    }
+
+    /**
+     * @brief Get the total number of unfinished tasks - either still in the queue, or running in a thread. This function expects that the caller has secured the mutex
+     *
+     * @return The total number of tasks.
+     */
+    inline ui32 get_tasks_total_unprotected() const
+    {
+        return tasks_total;
     }
 
     // ============
@@ -401,19 +413,39 @@ private:
     // ============
 
     /**
-     * @brief A mutex to synchronize access to the task queue by different threads.
+     * @brief A mutex to synchronize access to the task queue and task count across different threads.
      */
-    mutable std::mutex queue_mutex = {};
+    mutable std::mutex tasks_mutex;
+
+    /**
+     * @brief A condition variable used to notify worker threads which are waiting for new tasks.
+     */
+    std::condition_variable task_available_condition_variable;
+
+    /**
+     * @brief A condition variable used to notify the main thread which might be waiting on work to be completed.
+     */
+    std::condition_variable tasks_done_condition_variable;
 
     /**
      * @brief An atomic variable indicating to the workers to keep running. When set to false, the workers permanently stop working.
      */
-    std::atomic<bool> running = true;
+    std::atomic<bool> running{true};
+
+    /**
+     * @brief An atomic variable indicating to the workers to pause. When set to true, the workers temporarily stop popping new tasks out of the queue, although any tasks already executed will keep running until they are done. Set to false again to resume popping tasks.
+     */
+    std::atomic<bool> paused{false};
 
     /**
      * @brief A queue of tasks to be executed by the threads.
      */
-    std::queue<std::function<void()>> tasks = {};
+    std::queue<std::function<void()>> tasks;
+
+    /**
+     * @brief A variable to keep track of the total number of unfinished tasks - either still in the queue, or running in a thread.
+     */
+    ui32 tasks_total{0};
 
     /**
      * @brief The number of threads in the pool.
@@ -424,11 +456,6 @@ private:
      * @brief A smart pointer to manage the memory allocated for the threads.
      */
     std::unique_ptr<std::thread[]> threads;
-
-    /**
-     * @brief An atomic variable to keep track of the total number of unfinished tasks - either still in the queue, or running in a thread.
-     */
-    std::atomic<ui32> tasks_total = 0;
 };
 
 //                                     End class thread_pool                                     //

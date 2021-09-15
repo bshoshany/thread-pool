@@ -315,42 +315,6 @@ void check_parallelize_loop()
 }
 
 /**
- * @brief Check that sleep_duration works for a specific value.
- *
- * @param duration The value of sleep_duration.
- */
-void check_sleep_duration(const ui32 &duration)
-{
-    dual_println("Submitting tasks with sleep_duration = ", duration, " microseconds...");
-    pool.sleep_duration = duration;
-    ui32 n = pool.get_thread_count() * 100;
-    std::vector<std::atomic<bool>> flags(n);
-    for (ui32 i = 0; i < n; i++)
-        pool.push_task([&flags, i]
-                       { flags[i] = true; });
-    pool.wait_for_tasks();
-    bool all_flags = true;
-    for (ui32 i = 0; i < n; i++)
-        all_flags = all_flags && flags[i];
-    check(all_flags);
-}
-
-/**
- * @brief Check that sleep_duration works for several different random values.
- */
-void check_sleep_duration()
-{
-    ui32 old_duration = pool.sleep_duration;
-    check_sleep_duration(0);
-    std::mt19937_64 mt(rd());
-    std::uniform_int_distribution<ui32> dist(1, 2000);
-    for (ui32 i = 0; i < 5; i++)
-        check_sleep_duration(dist(mt));
-    dual_println("Resetting sleep_duration to the default value (", old_duration, " microseconds).");
-    pool.sleep_duration = old_duration;
-}
-
-/**
  * @brief Check that task monitoring works.
  */
 void check_task_monitoring()
@@ -398,7 +362,7 @@ void check_pausing()
     dual_println("Resetting pool to ", n, " threads.");
     pool.reset(n);
     dual_println("Pausing pool.");
-    pool.paused = true;
+    pool.pause();
     dual_println("Submitting ", n * 3, " tasks, each one waiting for 200ms.");
     for (ui32 i = 0; i < n * 3; i++)
         pool.push_task([i]
@@ -412,12 +376,12 @@ void check_pausing()
     dual_println("300ms later, should still have: ", n * 3, " tasks total, ", 0, " tasks running, ", n * 3, " tasks queued...");
     check(pool.get_tasks_total() == n * 3 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n * 3);
     dual_println("Unpausing pool.");
-    pool.paused = false;
+    pool.resume();
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     dual_println("300ms later, should have: ", n * 2, " tasks total, ", n, " tasks running, ", n, " tasks queued...");
     check(pool.get_tasks_total() == n * 2 && pool.get_tasks_running() == n && pool.get_tasks_queued() == n);
     dual_println("Pausing pool and using wait_for_tasks() to wait for the running tasks.");
-    pool.paused = true;
+    pool.pause();
     pool.wait_for_tasks();
     dual_println("After waiting, should have: ", n, " tasks total, ", 0, " tasks running, ", n, " tasks queued...");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n);
@@ -425,7 +389,7 @@ void check_pausing()
     dual_println("200ms later, should still have: ", n, " tasks total, ", 0, " tasks running, ", n, " tasks queued...");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n);
     dual_println("Unpausing pool and using wait_for_tasks() to wait for all tasks.");
-    pool.paused = false;
+    pool.resume();
     pool.wait_for_tasks();
     dual_println("After waiting, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
     check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
@@ -938,32 +902,6 @@ void check_performance()
     matrix<double> X = rnd.generate_matrix(rows / mult_factor, cols / mult_factor, thread_count);
     matrix<double> Y = rnd.generate_matrix(cols / mult_factor, rows / mult_factor, thread_count);
 
-    // Determine the optimal sleep duration for this system.
-    dual_print("Determining the optimal sleep duration...");
-    i64 optimal_ms = 0;
-    ui64 optimal_sleep = 0;
-    for (ui64 sleep = 0; sleep <= 2000; sleep += 100)
-    {
-        dual_print(".");
-        pool.sleep_duration = (ui32)sleep;
-        tmr.start();
-        matrix<double> C = add_matrices(A, B, thread_count);
-        matrix<double> D = A.transpose(thread_count);
-        matrix<double> E = multiply_matrices(X, Y, thread_count);
-        matrix<double> F = rnd.generate_matrix(rows, cols, thread_count);
-        tmr.stop();
-        if (tmr.ms() < optimal_ms || optimal_ms == 0)
-        {
-            optimal_ms = tmr.ms();
-            optimal_sleep = sleep;
-        }
-    }
-    if (optimal_sleep == 0)
-        dual_println("\nResult: Using std::this_thread::yield() instead of std::this_thread::sleep_for() is optimal.");
-    else
-        dual_println("\nResult: The optimal sleep duration is ", optimal_sleep, " microseconds.");
-    pool.sleep_duration = (ui32)optimal_sleep;
-
     // Vectors to store statistics.
     std::vector<double> different_n_timings;
     std::vector<i64> same_n_timings;
@@ -1079,9 +1017,6 @@ int main()
 
     print_header("Checking that parallelize_loop() works:");
     check_parallelize_loop();
-
-    print_header("Checking that different values of sleep_duration work:");
-    check_sleep_duration();
 
     print_header("Checking that task monitoring works:");
     check_task_monitoring();
