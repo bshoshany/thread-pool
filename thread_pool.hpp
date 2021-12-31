@@ -144,11 +144,12 @@ public:
             block_size = 1;
             num_blocks = (ui32)total_size > 1 ? (ui32)total_size : 1;
         }
+        num_blocks--;
         std::atomic<ui32> blocks_running = 0;
         for (ui32 t = 0; t < num_blocks; t++)
         {
             T start = ((T)(t * block_size) + the_first_index);
-            T end = (t == num_blocks - 1) ? last_index + 1 : ((T)((t + 1) * block_size) + the_first_index);
+            T end = ((T)((t + 1) * block_size) + the_first_index);
             blocks_running++;
             push_task([start, end, &loop, &blocks_running]
                       {
@@ -156,6 +157,9 @@ public:
                           blocks_running--;
                       });
         }
+        T start = ((T)(num_blocks * block_size) + the_first_index);
+        T end = last_index + 1;
+        loop(start, end);
         while (blocks_running != 0)
         {
             sleep_or_yield();
