@@ -396,6 +396,22 @@ void check_pausing()
 {
     ui32 n = std::min<ui32>(std::thread::hardware_concurrency(), 4);
     dual_println("Resetting pool to ", n, " threads.");
+    // If `paused` is false before we reset, there's a race.
+    //
+    // After reset new threads are created and work functions are running.
+    // Consider following test in thread_pool::worker function:
+    //     if (!paused && pop_task(task))
+    //
+    // The execution sequence could be:
+    //      worker thread             test thread
+    // ------------------------  ----------------------
+    //  check !paused => true
+    //                            set paused = true
+    //                            push n * 3 tasks
+    //  pop_task got task
+    //
+    // Now the test will fail.
+    pool.paused = true;
     pool.reset(n);
     dual_println("Pausing pool.");
     pool.paused = true;
