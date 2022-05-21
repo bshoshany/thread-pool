@@ -1095,6 +1095,7 @@ int main()
     print_header("Testing that matrix operations produce the expected results:");
     check_matrix();
 
+    int exit_code = 0;
     if (tests_failed == 0)
     {
         print_header("SUCCESS: Passed all " + std::to_string(tests_succeeded) + " checks!", '+');
@@ -1106,7 +1107,8 @@ int main()
     {
         print_header("FAILURE: Passed " + std::to_string(tests_succeeded) + " checks, but failed " + std::to_string(tests_failed) + "!", '+');
         dual_println("\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
+        exit_code = 1;
     }
 
-    return 0;
+    return exit_code;
 }
