@@ -126,6 +126,12 @@ As an example, to compile the test program `BS_thread_pool_test.cpp` with warnin
 * On Windows with MSVC: `cl BS_thread_pool_test.cpp /std:c++17 /permissive- /O2 /W4 /EHsc /Fe:BS_thread_pool_test.exe`
 * On Linux with GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -pthread -o BS_thread_pool_test`
 
+### Compiling with CMake
+
+See the [BUILDING](BUILDING.md) document.
+
+See the [HACKING](HACKING.md) document.
+
 ### Installing using vcpkg
 
 If you are using the [vcpkg](https://github.com/microsoft/vcpkg) C/C++ library manager, you can easily download and install this package with the following commands.
