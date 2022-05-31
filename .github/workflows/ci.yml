@@ -33,7 +33,7 @@ jobs:
       run: cmake -P cmake/spell.cmake
 
   coverage:
-    needs: [lint]
+    # needs: [lint]
 
     runs-on: ubuntu-latest
 
@@ -70,7 +70,7 @@ jobs:
         file: build/coverage/coverage.info
 
   sanitize:
-    needs: [lint]
+    # needs: [lint]
 
     runs-on: ubuntu-latest
 
@@ -96,7 +96,7 @@ jobs:
       run: ctest --output-on-failure -j 2
 
   test:
-    needs: [lint]
+    # needs: [lint]
 
     strategy:
       matrix:

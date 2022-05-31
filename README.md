@@ -42,7 +42,7 @@ By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://bara
     * [Automated tests](#automated-tests)
     * [Performance tests](#performance-tests)
 * [Issue and pull request policy](#issue-and-pull-request-policy)
-* [Acknowledgements](#acknowledgements)
+* [Acknowledgments](#Acknowledgments)
 * [Copyright and citing](#copyright-and-citing)
 
 ## Introduction
@@ -1083,7 +1083,7 @@ This package is under continuous and active development. If you encounter any bu
 
 Contributions are always welcome. However, I release my projects in cumulative updates after editing and testing them locally on my system, so my policy is not to accept any pull requests. If you open a pull request, and I decide to incorporate your suggestion into the project, I will first modify your code to comply with the project's coding conventions (formatting, syntax, naming, comments, programming practices, etc.), and perform some tests to ensure that the change doesn't break anything. I will then merge it into the next release of the project, possibly together with some other changes. The new release will also include a note in `CHANGELOG.md` with a link to your pull request, and modifications to the documentation in `README.md` as needed.
 
-## Acknowledgements
+## Acknowledgments
 
 Many GitHub users have helped improve this project, directly or indirectly, via issues, pull requests, comments, and/or personal correspondence. Please see `CHANGELOG.md` for links to specific issues and pull requests that have been the most helpful. Thank you all for your contribution! :)
 
