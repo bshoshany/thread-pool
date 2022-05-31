@@ -9,14 +9,17 @@ include(../cmake/windows-set-path.cmake)
 # ---- Dependencies ----
 
 if(PROJECT_IS_TOP_LEVEL)
-  find_package(bshoshany-thread-pool REQUIRED)
+  find_package(bshoshany-thread-pool REQUIRED)  
   enable_testing()
 endif()
+
+find_package(Threads REQUIRED)
 
 # ---- Tests ----
 
 add_executable(bshoshany-thread-pool_test source/BS_thread_pool_test.cpp)
 target_link_libraries(bshoshany-thread-pool_test PRIVATE bshoshany-thread-pool::bshoshany-thread-pool)
+target_link_libraries(bshoshany-thread-pool_test PRIVATE Threads::Threads)
 target_compile_features(bshoshany-thread-pool_test PRIVATE cxx_std_17)
 
 add_test(NAME bshoshany-thread-pool_test COMMAND bshoshany-thread-pool_test)

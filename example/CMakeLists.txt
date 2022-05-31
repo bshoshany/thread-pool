@@ -9,11 +9,14 @@ if(PROJECT_IS_TOP_LEVEL)
   find_package(bshoshany-thread-pool REQUIRED)
 endif()
 
+find_package(Threads REQUIRED)
+
 add_custom_target(run-examples)
 
 function(add_example NAME)
   add_executable("${NAME}" "${NAME}.cpp")
   target_link_libraries("${NAME}" PRIVATE bshoshany-thread-pool::bshoshany-thread-pool)
+  target_link_libraries("${NAME}" PRIVATE Threads::Threads)
   target_compile_features("${NAME}" PRIVATE cxx_std_17)
   add_custom_target("run_${NAME}" COMMAND "${NAME}" VERBATIM)
   add_dependencies("run_${NAME}" "${NAME}")
