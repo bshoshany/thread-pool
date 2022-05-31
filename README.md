@@ -2,29 +2,25 @@
 [![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b.svg)](https://arxiv.org/abs/2105.00613)
 [![License: MIT](https://img.shields.io/github/license/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt)
 ![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)
-![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/thread_pool.hpp)
+![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/BS_thread_pool.hpp)
 ![GitHub last commit](https://img.shields.io/github/last-commit/bshoshany/thread-pool)
 [![GitHub repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=social)](https://github.com/bshoshany/thread-pool)
 [![Twitter @BarakShoshany](https://img.shields.io/twitter/follow/BarakShoshany?style=social)](https://twitter.com/BarakShoshany)
-[![Open in Visual Studio Code](https://open.vscode.dev/badges/open-in-vscode.svg)](https://open.vscode.dev/bshoshany/thread-pool)
+[![Open in Visual Studio Code](https://img.shields.io/badge/-Open%20in%20Visual%20Studio%20Code-007acc)](https://vscode.dev/github/bshoshany/thread-pool)
 
-# A C++17 Thread Pool for High-Performance Scientific Computing
+# `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
-**Barak Shoshany**\
-Department of Physics, Brock University,\
-1812 Sir Isaac Brock Way, St. Catharines, Ontario, L2S 3A1, Canada\
-[bshoshany@brocku.ca](mailto:bshoshany@brocku.ca) | [https://baraksh.com/](https://baraksh.com/)\
-Companion paper: [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)\
-DOI: [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687)
+Documentation for v3.0.0 (2022-05-30)
 
-* [Abstract](#abstract)
+By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://baraksh.com/](https://baraksh.com/))
+
 * [Introduction](#introduction)
     * [Motivation](#motivation)
     * [Overview of features](#overview-of-features)
     * [Compiling and compatibility](#compiling-and-compatibility)
+    * [Installing using vcpkg](#installing-using-vcpkg)
 * [Getting started](#getting-started)
     * [Including the library](#including-the-library)
-    * [Installing using vcpkg](#installing-using-vcpkg)
     * [Constructors](#constructors)
     * [Getting and resetting the number of threads in the pool](#getting-and-resetting-the-number-of-threads-in-the-pool)
     * [Finding the version of the package](#finding-the-version-of-the-package)
@@ -33,24 +29,21 @@ DOI: [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687)
     * [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
     * [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
     * [Parallelizing loops](#parallelizing-loops)
+    * [Loops with return values](#loops-with-return-values)
 * [Helper classes](#helper-classes)
+    * [Handling multiple futures at once](#handling-multiple-futures-at-once)
     * [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
     * [Measuring execution time](#measuring-execution-time)
 * [Other features](#other-features)
-    * [Setting the worker function's sleep duration](#setting-the-worker-functions-sleep-duration)
     * [Monitoring the tasks](#monitoring-the-tasks)
     * [Pausing the workers](#pausing-the-workers)
     * [Exception handling](#exception-handling)
 * [Testing the package](#testing-the-package)
     * [Automated tests](#automated-tests)
     * [Performance tests](#performance-tests)
-    * [Dual Intel Xeon Gold 6148 (80 threads)](#dual-intel-xeon-gold-6148-80-threads)
 * [Issue and pull request policy](#issue-and-pull-request-policy)
+* [Acknowledgements](#acknowledgements)
 * [Copyright and citing](#copyright-and-citing)
-
-## Abstract
-
-We present a modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, our implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. This paper provides motivation, detailed usage instructions, and performance tests. The code is freely available in the [GitHub repository](https://github.com/bshoshany/thread-pool). This `README.md` file contains roughly the same content as the [companion paper](https://arxiv.org/abs/2105.00613).
 
 ## Introduction
 
@@ -58,15 +51,15 @@ We present a modern C++17-compatible thread pool implementation, built from scra
 
 Multithreading is essential for modern high-performance computing. Since C++11, the C++ standard library has included built-in low-level multithreading support using constructs such as `std::thread`. However, `std::thread` creates a new thread each time it is called, which can have a significant performance overhead. Furthermore, it is possible to create more threads than the hardware can handle simultaneously, potentially resulting in a substantial slowdown.
 
-This library contains a thread pool class, `thread_pool`, which avoids these issues by creating a fixed pool of threads once and for all, and then reusing the same threads to perform different tasks throughout the lifetime of the pool. By default, the number of threads in the pool is equal to the maximum number of threads that the hardware can run in parallel.
+The library presented here contains a thread pool class, `BS::thread_pool`, which avoids these issues by creating a fixed pool of threads once and for all, and then continuously reusing the same threads to perform different tasks throughout the lifetime of the program. By default, the number of threads in the pool is equal to the maximum number of threads that the hardware can run in parallel.
 
-The user submits tasks to be executed into a queue. Whenever a thread becomes available, it pops a task from the queue and executes it. Each task is automatically assigned an `std::future`, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
+The user submits tasks to be executed into a queue. Whenever a thread becomes available, it retrieves the next task from the queue and executes it. The pool automatically produces an `std::future` for each task, which allows the user to wait for the task to finish executing and/or obtain its eventual return value, if applicable. Threads and tasks are autonomously managed by the pool in the background, without requiring any input from the user aside from submitting the desired tasks.
 
-In addition to `std::thread`, the C++ standard library also offers the higher-level construct `std::async`, which may internally utilize a thread pool - but this is not guaranteed, and in fact, currently only the MSVC implementation of `std::async` uses a thread pool, while GCC and Clang do not. Using our custom-made thread pool class instead of `std::async` allows the user more control, transparency, and portability.
+The design of this package was guided by four important principles. First, *compactness*: the entire library consists of just one small self-contained header file, with no other components or dependencies. Second, *portability*: the package only utilizes the C++17 standard library, without relying on any compiler extensions or 3rd-party libraries, and is therefore compatible with any modern standards-conforming C++17 compiler on any platform. Third, *ease of use*: the package is extensively documented, and programmers of any level should be able to use it right out of the box.
 
-High-level multithreading APIs, such as OpenMP, allow simple one-line automatic parallelization of C++ code, but they do not give the user precise low-level control over the details of the parallelization. The thread pool class presented here allows the programmer to perform and manage the parallelization at the lowest level, and thus permits more robust optimizations, which can be used to achieve considerably higher performance.
+The fourth and final guiding principle is *performance*: each and every line of code in this library was carefully designed with maximum performance in mind, and performance was tested and verified on a variety of compilers and platforms. Indeed, the library was originally designed for use in the author's own computationally-intensive scientific computing projects, running both on high-end desktop/laptop computers and high-performance computing nodes.
 
-As demonstrated in the performance tests [below](#performance-tests), using our thread pool class we were able to saturate the upper bound of expected speedup for matrix multiplication and generation of random matrices. These performance tests were performed on 12-core / 24-thread and 40-core / 80-thread systems using GCC on Linux.
+Other, more advanced multithreading libraries may offer more features and/or higher performance. However, they typically consist of a vast codebase with multiple components and dependencies, and involve complex APIs that require a substantial time investment to learn. This library is not intended to replace these more advanced libraries; instead, it was designed for users who don't require very advanced features, and prefer a simple and lightweight package that is easy to learn and use and can be readily incorporated into existing or new projects.
 
 ### Overview of features
 
@@ -77,68 +70,61 @@ As demonstrated in the performance tests [below](#performance-tests), using our 
     * Reusing threads avoids the overhead of creating and destroying them for individual tasks.
     * A task queue ensures that there are never more threads running in parallel than allowed by the hardware.
 * **Lightweight:**
-    * Only ~180 lines of code, excluding comments, blank lines, and the two optional helper classes.
-    * Single header file: simply `#include "thread_pool.hpp"`.
+    * Only ~190 lines of code, excluding comments, blank lines, and the two optional helper classes.
+    * Single header file: simply `#include "BS_thread_pool.hpp"` and you're all set!
     * Header-only: no need to install or build the library.
-    * Self-contained: no external requirements or dependencies. Does not require OpenMP or any other multithreading APIs. Only uses the C++ standard library, and works with any C++17-compliant compiler.
+    * Self-contained: no external requirements or dependencies.
+    * Portable: uses only the C++ standard library, and works with any C++17-compliant compiler.
 * **Easy to use:**
     * Very simple operation, using a handful of member functions.
-    * Every task submitted to the queue automatically generates an `std::future`, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
-    * Optionally, tasks may also be submitted without generating a future, sacrificing convenience for greater performance.
+    * Every task submitted to the queue using the `submit()` member function automatically generates an `std::future`, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
+    * Optionally, tasks may also be submitted using the `push_task()` member function without generating a future, sacrificing convenience for even greater performance.
     * The code is thoroughly documented using Doxygen comments - not only the interface, but also the implementation, in case the user would like to make modifications.
-    * The included test program `thread_pool_test.cpp` can be used to perform comprehensive automated tests and benchmarks, and also serves as an extensive example of how to properly use the package.
+    * The included test program `BS_thread_pool_test.cpp` can be used to perform exhaustive automated tests and benchmarks, and also serves as a comprehensive example of how to properly use the package.
+* **Helper classes:**
+    * Automatically parallelize a loop into any number of parallel tasks using the `parallelize_loop()` member function, and track its execution using the `BS::multi_future` helper class.
+    * Synchronize output to a stream from multiple threads in parallel using the `BS::synced_stream` helper class.
+    * Easily measure execution time for benchmarking purposes using the `BS::timer` helper class.
 * **Additional features:**
-    * Automatically parallelize a loop into any number of parallel tasks.
-    * Easily wait for all tasks in the queue to complete.
-    * Change the number of threads in the pool safely and on-the-fly as needed.
-    * Fine-tune the sleep duration of each thread's worker function for optimal performance.
-    * Monitor the number of queued and/or running tasks.
-    * Pause and resume popping new tasks out of the queue.
+    * Easily wait for all tasks in the queue to complete using the `wait_for_tasks()` member function.
+    * Change the number of threads in the pool safely and on-the-fly as needed using the `reset()` member function.
+    * Monitor the number of queued and/or running tasks using the `get_tasks_queued()`, `get_tasks_running()`, and `get_tasks_total()` member functions.
+    * Freely pause and resume the pool by modifying the `paused` member variable. When paused, threads do not retrieve new tasks out of the queue.
     * Catch exceptions thrown by the submitted tasks.
-    * Synchronize output to a stream from multiple threads in parallel using the `synced_stream` helper class.
-    * Easily measure execution time for benchmarking purposes using the `timer` helper class.
     * Under continuous and active development. Bug reports and feature requests are welcome, and should be made via [GitHub issues](https://github.com/bshoshany/thread-pool/issues).
 
 ### Compiling and compatibility
 
-This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available. Compatibility was verified with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz using the following compilers and platforms:
+This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available. Compatibility was verified with a 12-core / 24-thread AMD Ryzen 9 3900X CPU using the following compilers and platforms:
 
-* Windows 10 build 19043.1165:
-    * [GCC](https://gcc.gnu.org/) v11.2.0 ([WinLibs build](https://winlibs.com/))
-    * [Clang](https://clang.llvm.org/) v12.0.1
-    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.29.30133
-* Ubuntu 21.04:
-    * [GCC](https://gcc.gnu.org/) v11.1.0
-    * [Clang](https://clang.llvm.org/) v12.0.0
+* Windows 11 build 22000.675:
+    * [GCC](https://gcc.gnu.org/) v12.1.0 ([WinLibs build](https://winlibs.com/))
+    * [Clang](https://clang.llvm.org/) v14.0.4
+    * [Intel oneAPI C++ Compiler](https://software.intel.com/content/www/us/en/develop/tools/oneapi/components/dpc-compiler.html) v2022.1.0
+    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.32.31329
+* Ubuntu 22.04 LTS:
+    * [GCC](https://gcc.gnu.org/) v12.0.1
+    * [Clang](https://clang.llvm.org/) v14.0.0
 
-In addition, this library was tested on a [Compute Canada](https://www.computecanada.ca/) node equipped with two 20-core / 40-thread Intel Xeon Gold 6148 CPUs at 2.4 GHz (for a total of 40 cores and 80 threads), running CentOS Linux 7.6.1810, using the following compilers:
+In addition, this library was tested on a [Compute Canada](https://www.computecanada.ca/) node equipped with two 20-core / 40-thread Intel Xeon Gold 6148 CPUs (for a total of 40 cores and 80 threads), running CentOS Linux 7.9.2009, using [GCC](https://gcc.gnu.org/) v12.1.1.
 
-* [GCC](https://gcc.gnu.org/) v9.4.0
-* [Intel C++ Compiler (ICC)](https://software.intel.com/content/www/us/en/develop/tools/oneapi/components/dpc-compiler.html) v19.1.3.304
-
-The test program `thread_pool_test.cpp` was compiled without warnings (with the warning flags `-Wall -Wpedantic -Wextra -Wconversion -Weffc++` in GCC/Clang and `/W4` in MSVC), executed, and successfully completed all [automated tests](#testing-the-package) using all of the compilers and systems mentioned above.
+The test program `BS_thread_pool_test.cpp` was compiled without warnings (with the warning flags `-Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow` in GCC/Clang and `/W4` in MSVC), executed, and successfully completed all [automated tests](#testing-the-package) and benchmarks using all of the compilers and systems mentioned above.
 
 As this library requires C++17 features, the code must be compiled with C++17 support:
 
-* For GCC, Clang, or ICC, use the `-std=c++17` flag. On Linux, you will also need to use the `-pthread` flag to enable the POSIX threads library.
-* For MSVC, use `/std:c++17`.
+* For GCC or Clang, use the `-std=c++17` flag. On Linux, you will also need to use the `-pthread` flag to enable the POSIX threads library.
+* For Intel, use `-std=c++17` on Linux or `/Qstd:c++17` on Windows.
+* For MSVC, use `/std:c++17`, and preferably also `/permissive-` to ensure standards conformance.
 
 For maximum performance, it is recommended to compile with all available compiler optimizations:
 
-* For GCC, Clang, or ICC, use the `-O3` flag.
+* For GCC or Clang, use the `-O3` flag.
+* For Intel, use `-O3` on Linux or `/O3` on Windows.
 * For MSVC, use `/O2`.
 
-## Getting started
-
-### Including the library
-
-To use the thread pool library, simply download the [latest release](https://github.com/bshoshany/thread-pool/releases) from the GitHub repository, place the single header file `thread_pool.hpp` in the desired folder, and include it in your program:
-
-```cpp
-#include "thread_pool.hpp"
-```
-
-The thread pool will now be accessible via the `thread_pool` class.
+As an example, to compile the test program `BS_thread_pool_test.cpp` with warnings and optimizations, it is recommended to use the following commands:
+* On Windows with MSVC: `cl BS_thread_pool_test.cpp /std:c++17 /permissive- /O2 /W4 /EHsc /Fe:BS_thread_pool_test.exe`
+* On Linux with GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -pthread -o BS_thread_pool_test`
 
 ### Installing using vcpkg
 
@@ -156,24 +142,36 @@ On Windows:
 .\vcpkg install bshoshany-thread-pool:x86-windows bshoshany-thread-pool:x64-windows
 ```
 
-The thread pool will then be available automatically in the build system you integrated vcpkg with (e.g. MSBuild or CMake). Simply write `#include "thread_pool.hpp"` in any project to use the thread pool, without having to copy to file into the project first. I will update the vcpkg port with each new release, so it will be updated automatically when you run `vcpkg upgrade`.
+The thread pool will then be available automatically in the build system you integrated vcpkg with (e.g. MSBuild or CMake). Simply write `#include "BS_thread_pool.hpp"` in any project to use the thread pool, without having to copy to file into the project first. I will update the vcpkg port with each new release, so it will be updated automatically when you run `vcpkg upgrade`.
 
 Please see the [vcpkg repository](https://github.com/microsoft/vcpkg) for more information on how to use vcpkg.
 
+## Getting started
+
+### Including the library
+
+If you are not using a C++ library manager (such as vcpkg), simply download the [latest release](https://github.com/bshoshany/thread-pool/releases) from the GitHub repository, place the single header file `BS_thread_pool.hpp` in the desired folder, and include it in your program:
+
+```cpp
+#include "BS_thread_pool.hpp"
+```
+
+The thread pool will now be accessible via the `BS::thread_pool` class.
+
 ### Constructors
 
-The default constructor creates a thread pool with as many threads as the hardware can handle concurrently, as reported by the implementation via `std::thread::hardware_concurrency()`. With a hyperthreaded CPU, this will be twice the number of CPU cores. This is probably the constructor you want to use. For example:
+The default constructor creates a thread pool with as many threads as the hardware can handle concurrently, as reported by the implementation via `std::thread::hardware_concurrency()`. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. For example:
 
 ```cpp
 // Constructs a thread pool with as many threads as available in the hardware.
-thread_pool pool;
+BS::thread_pool pool;
 ```
 
 Optionally, a number of threads different from the hardware concurrency can be specified as an argument to the constructor. However, note that adding more threads than the hardware can handle will **not** improve performance, and in fact will most likely hinder it. This option exists in order to allow using **less** threads than the hardware concurrency, in cases where you wish to leave some threads available for other processes. For example:
 
 ```cpp
 // Constructs a thread pool with only 12 threads.
-thread_pool pool(12);
+BS::thread_pool pool(12);
 ```
 
 If your program's main thread only submits tasks to the thread pool and waits for them to finish, and does not perform any computationally intensive tasks on its own, then it is recommended to use the default value for the number of threads. This ensures that all of the threads available in the hardware will be put to work while the main thread waits.
@@ -190,17 +188,19 @@ It is generally unnecessary to change the number of threads in the pool after it
 
 ### Finding the version of the package
 
-If desired, the version of this package may be read during compilation time from the macro `THREAD_POOL_VERSION`. The value will be a string containing the version number and release date. For example:
+If desired, the version of this package may be read during compilation time from the macro `BS_THREAD_POOL_VERSION`. The value will be a string containing the version number and release date. For example:
 
 ```cpp
-std::cout << "Thread pool library version is " << THREAD_POOL_VERSION << ".\n";
+std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION << ".\n";
 ```
 
 Sample output:
 
 ```none
-Thread pool library version is v2.0.0 (2021-08-14).
+Thread pool library version is v3.0.0 (2022-05-30).
 ```
+
+This can be used, for example, to allow the same code to work with several incompatible versions of the library.
 
 ## Submitting and waiting for tasks
 
@@ -219,12 +219,11 @@ auto my_future = pool.submit(task, arg);
 auto my_future = pool.submit(task, arg1, arg2);
 ```
 
-Using `auto` for the return value of `submit()` is recommended, since it means the compiler will automatically detect which instance of the template `std::future` to use. The value of the future depends on whether the function has a return value or not:
+If the submitted function has a return value of type `T`, then the future will be of type `std::future<T>`, and will be set to the return value when the function finishes its execution. If the submitted function does not have a return value, then the future will be an `std::future<void>`, which will not return any value but may still be used to wait for the function to finish.
 
-* If the submitted function has a return value, then the future will be set to that value when the function finishes its execution.
-* If the submitted function does not have a return value, then the future will be a `bool` that will be set to `true` when the function finishes its execution.
+Using `auto` for the return value of `submit()` means the compiler will automatically detect which instance of the template `std::future` to use. However, specifying the particular type `std::future<T>`, as in the examples below, is recommended for increased readability.
 
-To wait until the future's value becomes available, use the member function `wait()`. To obtain the value itself, use the member function `get()`, which will also automatically wait for the future if it's not ready yet. For example:
+To wait until the task finishes, use the member function `wait()` of the future. To obtain the return value, use the member function `get()`, which will also automatically wait for the task to finish if it hasn't yet. For example:
 
 ```cpp
 // Submit a task and get a future.
@@ -235,9 +234,80 @@ do_stuff();
 auto my_return_value = my_future.get();
 ```
 
+Here are some more concrete examples. The following program will print out `42`:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::thread_pool pool;
+    std::future<int> my_future = pool.submit([] { return 42; });
+    std::cout << my_future.get();
+}
+```
+
+Here we used a [lambda expression](https://en.cppreference.com/w/cpp/language/lambda) to quickly define the function on-the-fly. However, we can also use a previously-defined function:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int the_answer()
+{
+    return 42;
+}
+
+int main()
+{
+    BS::thread_pool pool;
+    std::future<int> my_future = pool.submit(the_answer);
+    std::cout << my_future.get();
+}
+```
+
+The following is an example of submitting a function with arguments:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int multiply(const int a, const int b)
+{
+    return a * b;
+}
+
+int main()
+{
+    BS::thread_pool pool;
+    std::future<int> my_future = pool.submit(multiply, 6, 7);
+    std::cout << my_future.get();
+}
+```
+
+Finally, here is an example of submitting a function with no return value and then using the future to wait for it to finish executing:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+void sleep()
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+}
+
+int main()
+{
+    BS::thread_pool pool;
+    std::future<void> my_future = pool.submit(sleep);
+    std::cout << "Waiting... ";
+    my_future.wait();
+    std::cout << "Done.";
+}
+```
+
+Here, the command `std::this_thread::sleep_for(std::chrono::milliseconds(1000))` instructs the thread to sleep for 1 second.
+
 ### Submitting tasks to the queue without futures
 
-Usually, it is best to submit a task to the queue using `submit()`. This allows you to wait for the task to finish and/or get its return value later. However, sometimes a future is not needed, for example when you just want to "set and forget" a certain task, or if the task already communicates with the main thread or with other tasks without using futures, such as via references or pointers. In such cases, you may wish to avoid the overhead involved in assigning a future to the task in order to increase performance.
+Usually, it is best to submit a task to the queue using `submit()`. This allows you to wait for the task to finish and/or get its return value later. However, sometimes a future is not needed, for example when you just want to "set and forget" a certain task, or if the task already communicates with the main thread or with other tasks without using futures, such as via condition variables. In such cases, you may wish to avoid the overhead involved in assigning a future to the task in order to increase performance.
 
 The member function `push_task()` allows you to submit a task to the queue without generating a future for it. The task can have any number of arguments, but it cannot have a return value. For example:
 
@@ -257,27 +327,39 @@ To wait for a **single** submitted task to complete, use `submit()` and then use
 Consider, for example, the following code:
 
 ```cpp
-thread_pool pool;
-size_t a[100];
-for (size_t i = 0; i < 100; i++)
-    pool.push_task([&a, i] { a[i] = i * i; });
-std::cout << a[50];
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::thread_pool pool(5);
+    int squares[100];
+    for (int i = 0; i < 100; ++i)
+        pool.push_task(
+            [&squares, i]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                squares[i] = i * i;
+            });
+    std::cout << squares[50];
+}
 ```
 
-The output will most likely be garbage, since the task that modifies `a[50]` has not yet finished executing by the time we try to access that element (in fact, that task is probably still waiting in the queue). One solution would be to use `submit()` instead of `push_task()`, but perhaps we don't want the overhead of generating 100 different futures. Instead, simply adding the line
+The output will most likely be garbage, since the task that modifies `squares[50]` has not yet finished executing by the time we try to access that element - it's still waiting in the queue. One solution would be to use `submit()` instead of `push_task()`, but perhaps we don't want the overhead of generating 100 different futures. Instead, simply adding the line
 
 ```cpp
 pool.wait_for_tasks();
 ```
 
-after the `for` loop will ensure - as efficiently as possible - that all tasks have finished running before we attempt to access any elements of the array `a`, and the code will print out the value `2500` as expected. (Note, however, that `wait_for_tasks()` will wait for **all** the tasks in the queue, including those that are unrelated to the `for` loop. Using `parallelize_loop()` would make much more sense in this particular case, as it will wait only for the tasks related to the loop.)
+after the `for` loop will ensure - as efficiently as possible - that all tasks have finished running before we attempt to access any elements of the array `squares`, and the code will print out the value `2500` as expected.
+
+Note, however, that `wait_for_tasks()` will wait for **all** the tasks in the queue, including those that are unrelated to the `for` loop. Using [`parallelize_loop()`](#parallelizing-loops) would make much more sense in this particular case, as it will allow waiting only for the tasks related to the loop.
 
 ### Parallelizing loops
 
 Consider the following loop:
 
 ```cpp
-for (T i = start; i < end; i++)
+for (T i = start; i < end; ++i)
     do_something(i);
 ```
 
@@ -290,59 +372,135 @@ where:
 This loop may be automatically parallelized and submitted to the thread pool's queue using the member function `parallelize_loop()` as follows:
 
 ```cpp
-auto loop = [](const T &a, const T &b)
+auto loop = [](const T a, const T b)
 {
-    for (T i = a; i < b; i++)
+    for (T i = a; i < b; ++i)
         do_something(i);
 };
-pool.parallelize_loop(start, end, loop, n);
+BS::multi_future<void> loop_future = pool.parallelize_loop(start, end, loop, n);
+loop_future.wait();
 ```
 
-The range of indices `[start, end)` will be divided into `n` blocks of the form `[a, b)`. For example, if the range is `[0, 9)` and there are 3 blocks, then the blocks will be the ranges `[0, 3)`, `[3, 6)`, and `[6, 9)`. If possible, the blocks will be equal in size, otherwise the last block may be a bit longer. Then, a task will be submitted for each block, consisting of the function `loop()` with its two arguments being the start and end of the range `[a, b)` of each block. The main thread will then wait until all tasks generated by `parallelize_loop()` finish executing (and only those tasks - not any other tasks that also happen to be in the queue).
+Here's how this works:
 
-In the example above, the lambda function `loop` was defined separately for clarity. In practice, the lambda function will usually be defined within the argument itself, as in the example below. `loop` can also be an ordinary function (with no return value) instead of a lambda function, but that may be less useful, since typically one would like to capture some of the surrounding variables, as below.
+* The lambda function  `loop()` takes two indices, `a`, and `b`, and executes only the portion of the loop in the range `[a, b)`.
+    * Note that this lambda was defined here separately for clarity. In practice, the lambda function will usually be defined within the call to `parallelize_loop()` itself, as in the examples below.
+    * `loop()` can also be an ordinary function (with or without a return value) instead of a lambda function, but that may be less useful, since typically one would like to capture some of the surrounding variables.
+* When `parallelize_loop(start, end, loop, n)` is called, it will divide the range of indices `[start, end)` into `n` blocks of the form `[a, b)`. For example, if the range is `[0, 9)` and there are 3 blocks, then the blocks will be the ranges `[0, 3)`, `[3, 6)`, and `[6, 9)`. If possible, the blocks will be equal in size, otherwise the last block may be a bit longer.
+* Then, a task will be submitted for each block, consisting of the function `loop()` with its two arguments being the start and end of the range `[a, b)` of each block.
+* Each task will have an `std::future<void>` assigned to it, and all these futures will be stored inside an object `loop_future` of the helper class template `BS::multi_future`.
+* When `loop_future.wait()` is called, the main thread will wait until all tasks generated by `parallelize_loop()` finish executing, and only those tasks - not any other tasks that also happen to be in the queue. This is essentially the role of the `BS::multi_future` class: to wait for a specific group of tasks, in this case the tasks running the loop blocks.
 
-If the fourth argument `n` is not specified, the number of blocks will be equal to the number of threads in the pool. For best performance, it is recommended to do your own benchmarks to find the optimal number of blocks for each loop (you can use the `timer` helper class - see [below](#measuring-execution-time)). Using less tasks than there are threads may be preferred if you are also running other tasks in parallel. Using more tasks than there are threads may improve performance in some cases.
+If the fourth argument `n` is not specified, the number of blocks will be equal to the number of threads in the pool. For best performance, it is recommended to do your own benchmarks to find the optimal number of blocks for each loop (you can use the `BS::timer` helper class - see [below](#measuring-execution-time)). Using less tasks than there are threads may be preferred if you are also running other tasks in parallel. Using more tasks than there are threads may improve performance in some cases.
 
 As a simple example, the following code will calculate the squares of all integers from 0 to 99. Since there are 10 threads, and we did not specify a fourth argument, the loop will be divided into 10 blocks, each calculating 10 squares:
 
 ```cpp
-#include "thread_pool.hpp"
+#include "BS_thread_pool.hpp"
 
 int main()
 {
-    thread_pool pool(10);
-    uint32_t squares[100];
+    BS::thread_pool pool(10);
+    int squares[100];
     pool.parallelize_loop(0, 100,
-                          [&squares](const uint32_t &a, const uint32_t &b)
+                          [&squares](const int a, const int b)
                           {
-                              for (uint32_t i = a; i < b; i++)
+                              for (int i = a; i < b; ++i)
                                   squares[i] = i * i;
-                          });
-    std::cout << "16^2 = " << squares[16] << '\n';
-    std::cout << "32^2 = " << squares[32] << '\n';
+                          })
+        .wait();
+    std::cout << squares[50];
 }
 ```
 
-The output should be:
+Note that here, for simplicity, instead of creating a `BS::multi_future` and then using it to wait, we simply called the `wait()` member function directly on the temporary object returned by `parallelize_loop()`. This is a convenient shortcut when we have nothing else to do while waiting.
 
-```none
-16^2 = 256
-32^2 = 1024
+### Loops with return values
+
+Usually, `parallelize_loop()` should take functions with no return values. This is because the function will be executed once for each block, but the blocks are managed by the thread pool, so there's limited usability in returning one value per block. However, for the case where this is desired, such as for summation or some sorting algorithms, `parallelize_loop()` does accept functions with return values, in which case it returns a `BS::multi_future<T>` object where `T` is the return value.
+
+Here's an example of summing all the numbers from 1 to 100:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::thread_pool pool;
+    BS::multi_future<int> mf = pool.parallelize_loop(1, 101,
+                                                     [](const int a, const int b)
+                                                     {
+                                                         int block_total = 0;
+                                                         for (int i = a; i < b; ++i)
+                                                             block_total += i;
+                                                         return block_total;
+                                                     });
+    std::vector<int> totals = mf.get();
+    int sum = 0;
+    for (const int t : totals)
+        sum += t;
+    std::cout << sum;
+}
 ```
 
+Note that calling `get()` on a `BS::multi_future<T>` object returns an `std::vector<T>` with the values obtained from each future. In this case, the values will be the partial sums from each block, so when we add them up, we will get the total sum.
+
 ## Helper classes
+
+### Handling multiple futures at once
+
+The helper class template `BS::multi_future<T>`, already introduced in the context of `parallelize_loop()`, provides a convenient way to collect and access groups of futures. The futures are stored in a public member variable `f` of type `std::vector<std::future<T>>`, so all standard `std::vector` operations are available for organizing the futures. Once the futures are stored, you can use `wait()` to wait for all of them at once or `get()` to get an `std::vector<T>` with the results from all of them. Here's a simple example:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int square(const int i)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return i * i;
+};
+
+int main()
+{
+    BS::thread_pool pool;
+    BS::multi_future<int> mf1;
+    BS::multi_future<int> mf2;
+    for (int i = 0; i < 100; ++i)
+        mf1.f.push_back(pool.submit(square, i));
+    for (int i = 100; i < 200; ++i)
+        mf2.f.push_back(pool.submit(square, i));
+    /// ...
+    /// Do some stuff while the first group of tasks executes...
+    /// ...
+    const std::vector<int> squares1 = mf1.get();
+    std::cout << "Results from the first group:" << '\n';
+    for (const int s : squares1)
+        std::cout << s << ' ';
+    /// ...
+    /// Do other stuff while the second group of tasks executes...
+    /// ...
+    const std::vector<int> squares2 = mf2.get();
+    std::cout << '\n' << "Results from the second group:" << '\n';
+    for (const int s : squares2)
+        std::cout << s << ' ';
+}
+```
+
+In this example, we simulate complicated tasks by having each task wait for 500ms before returning its result. We collect the futures of the tasks submitted within each loop into two separate `BS::multi_future<int>` objects. `mf1` holds the results from the first loop, and `mf2` holds the results from the second loop. Now we can wait for and/or get the results from `mf1` whenever is convenient, and separately wait for and/or get the results from `mf2` at another time.
 
 ### Synchronizing printing to an output stream
 
 When printing to an output stream from multiple threads in parallel, the output may become garbled. For example, consider this code:
 
 ```cpp
-thread_pool pool;
-for (auto i = 1; i <= 5; i++)
-    pool.push_task([i] {
-        std::cout << "Task no. " << i << " executing.\n";
-    });
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::thread_pool pool;
+    for (size_t i = 1; i <= 5; ++i)
+        pool.push_task([i] { std::cout << "Task no. " << i << " executing.\n"; });
+}
 ```
 
 The output may look as follows:
@@ -357,26 +515,29 @@ Task no. 1 executing.
 
 The reason is that, although each **individual** insertion to `std::cout` is thread-safe, there is no mechanism in place to ensure subsequent insertions from the same thread are printed contiguously.
 
-The helper class `synced_stream` is designed to eliminate such synchronization issues. The constructor takes one optional argument, specifying the output stream to print to. If no argument is supplied, `std::cout` will be used:
+The helper class `BS::synced_stream` is designed to eliminate such synchronization issues. The constructor takes one optional argument, specifying the output stream to print to. If no argument is supplied, `std::cout` will be used:
 
 ```cpp
 // Construct a synced stream that will print to std::cout.
-synced_stream sync_out;
+BS::synced_stream sync_out;
 // Construct a synced stream that will print to the output stream my_stream.
-synced_stream sync_out(my_stream);
+BS::synced_stream sync_out(my_stream);
 ```
 
-The member function `print()` takes an arbitrary number of arguments, which are inserted into the stream one by one, in the order they were given. `println()` does the same, but also prints a newline character `\n` at the end, for convenience. A mutex is used to synchronize this process, so that any other calls to `print()` or `println()` using the same `synced_stream` object must wait until the previous call has finished.
+The member function `print()` takes an arbitrary number of arguments, which are inserted into the stream one by one, in the order they were given. `println()` does the same, but also prints a newline character `\n` at the end, for convenience. A mutex is used to synchronize this process, so that any other calls to `print()` or `println()` using the same `BS::synced_stream` object must wait until the previous call has finished.
 
 As an example, this code:
 
 ```cpp
-synced_stream sync_out;
-thread_pool pool;
-for (auto i = 1; i <= 5; i++)
-    pool.push_task([i, &sync_out] {
-        sync_out.println("Task no. ", i, " executing.");
-    });
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::synced_stream sync_out;
+    BS::thread_pool pool;
+    for (size_t i = 1; i <= 5; ++i)
+        pool.push_task([i, &sync_out] { sync_out.println("Task no. ", i, " executing."); });
+}
 ```
 
 Will print out:
@@ -389,21 +550,15 @@ Task no. 4 executing.
 Task no. 5 executing.
 ```
 
-**Warning:** Always create the `synced_stream` object **before** the `thread_pool` object, as we did in this example. When the `thread_pool` object goes out of scope, it waits for the remaining tasks to be executed. If the `synced_stream` object goes out of scope before the `thread_pool` object, then any tasks using the `synced_stream` will crash. Since objects are destructed in the opposite order of construction, creating the `synced_stream` object before the `thread_pool` object ensures that the `synced_stream` is always available to the tasks, even while the pool is destructing.
+**Warning:** Always create the `BS::synced_stream` object **before** the `BS::thread_pool` object, as we did in this example. When the `BS::thread_pool` object goes out of scope, it waits for the remaining tasks to be executed. If the `BS::synced_stream` object goes out of scope before the `BS::thread_pool` object, then any tasks using the `BS::synced_stream` will crash. Since objects are destructed in the opposite order of construction, creating the `BS::synced_stream` object before the `BS::thread_pool` object ensures that the `BS::synced_stream` is always available to the tasks, even while the pool is destructing.
 
 ### Measuring execution time
 
 If you are using a thread pool, then your code is most likely performance-critical. Achieving maximum performance requires performing a considerable amount of benchmarking to determine the optimal settings and algorithms. Therefore, it is important to be able to measure the execution time of various computations and operations under different conditions.
 
-For example, you may be interested in figuring out:
+The helper class `BS::timer` provides a simple way to measure execution time. It is very straightforward to use:
 
-* The optimal number of threads in the pool.
-* The optimal number of tasks to divide a specific operation into, either using `parallelize_loop()` or manually.
-* The optimal [sleep duration](#setting-the-worker-functions-sleep-duration) for the worker functions.
-
-The helper class `timer` provides a simple way to measure execution time. It is very straightforward to use:
-
-1. Create a new `timer` object.
+1. Create a new `BS::timer` object.
 2. Immediately before you execute the computation that you want to time, call the `start()` member function.
 3. Immediately after the computation ends, call the `stop()` member function.
 4. Use the member function `ms()` to obtain the elapsed time for the computation in milliseconds.
@@ -411,26 +566,16 @@ The helper class `timer` provides a simple way to measure execution time. It is 
 For example:
 
 ```cpp
-timer tmr;
+BS::timer tmr;
 tmr.start();
 do_something();
 tmr.stop();
 std::cout << "The elapsed time was " << tmr.ms() << " ms.\n";
 ```
 
+A practical application of the `BS::timer` class can be found in the benchmark portion of the test program `BS_thread_pool_test.cpp`.
+
 ## Other features
-
-### Setting the worker function's sleep duration
-
-The **worker function** is the function that controls the execution of tasks by each thread. It loops continuously, and with each iteration of the loop, checks if there are any tasks in the queue. If it finds a task, it pops it out of the queue and executes it. If it does not find a task, it will wait for a bit, by calling `std::this_thread::sleep_for()`, and then check the queue again. The public member variable `sleep_duration` controls the duration, in microseconds, that the worker function sleeps for when it cannot find a task in the queue.
-
-The default value of `sleep_duration` is `1000` microseconds, or `1` millisecond. In our benchmarks, lower values resulted in high CPU usage when the workers were idle. The value of `1000` microseconds was roughly the minimum value needed to reduce the idle CPU usage to a negligible amount.
-
-In addition, in our benchmarks this value resulted in moderately improved performance compared to lower values, since the workers check the queue - which is a costly process - less frequently. On the other hand, increasing the value even more could potentially cause the workers to spend too much time sleeping and not pick up tasks from the queue quickly enough, so `1000` is the "sweet spot".
-
-However, please note that this value is likely unique to the particular system our benchmarks were performed on, and your own optimal value would depend on factors such as your OS and C++ implementation, the type, complexity, and average duration of the tasks submitted to the pool, and whether there are any other programs running at the same time. Therefore, it is strongly recommended to do your own benchmarks and find the value that works best for you.
-
-If `sleep_duration` is set to `0`, then the worker function will execute `std::this_thread::yield()` instead of sleeping if there are no tasks in the queue. This will suggest to the OS that it should put this thread on hold and allow other threads to run instead. However, this also causes the worker functions to have high CPU usage when idle. On the other hand, for some applications this setting may provide better performance than sleeping - again, do your own benchmarks and find what works best for you.
 
 ### Monitoring the tasks
 
@@ -438,18 +583,18 @@ Sometimes you may wish to monitor what is happening with the tasks you submitted
 
 * `get_tasks_queued()` gets the number of tasks currently waiting in the queue to be executed by the threads.
 * `get_tasks_running()` gets the number of tasks currently being executed by the threads.
-* `get_tasks_total()` gets the total number of unfinished tasks - either still in the queue, or running in a thread.
-* Note that `get_tasks_running() == get_tasks_total() - get_tasks_queued()`.
+* `get_tasks_total()` gets the total number of unfinished tasks: either still in the queue, or running in a thread.
+* Note that `get_tasks_total() == get_tasks_queued() + get_tasks_running()`.
 
 These functions are demonstrated in the following program:
 
 ```cpp
-#include "thread_pool.hpp"
+#include "BS_thread_pool.hpp"
 
-synced_stream sync_out;
-thread_pool pool(4);
+BS::synced_stream sync_out;
+BS::thread_pool pool(4);
 
-void sleep_half_second(const size_t &i)
+void sleep_half_second(const size_t i)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     sync_out.println("Task ", i, " done.");
@@ -457,17 +602,12 @@ void sleep_half_second(const size_t &i)
 
 void monitor_tasks()
 {
-    sync_out.println(pool.get_tasks_total(),
-                     " tasks total, ",
-                     pool.get_tasks_running(),
-                     " tasks running, ",
-                     pool.get_tasks_queued(),
-                     " tasks queued.");
+    sync_out.println(pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued.");
 }
 
 int main()
 {
-    for (size_t i = 0; i < 12; i++)
+    for (size_t i = 0; i < 12; ++i)
         pool.push_task(sleep_half_second, i);
     monitor_tasks();
     std::this_thread::sleep_for(std::chrono::milliseconds(750));
@@ -479,7 +619,7 @@ int main()
 }
 ```
 
-Assuming you have at least 4 hardware threads (so that 4 tasks can run concurrently), the output will be similar to:
+Assuming you have at least 4 hardware threads (so that 4 tasks can run concurrently), the output should be similar to:
 
 ```none
 12 tasks total, 0 tasks running, 12 tasks queued.
@@ -502,19 +642,19 @@ Task 11 done.
 
 ### Pausing the workers
 
-Sometimes you may wish to temporarily pause the execution of tasks, or perhaps you want to submit tasks to the queue but only start executing them at a later time. You can do this using the public member variable `paused`.
+Sometimes you may wish to temporarily pause the execution of tasks, or perhaps you want to submit tasks to the queue in advance and only start executing them at a later time. You can do this using the public member variable `paused`.
 
-When `paused` is set to `true`, the workers will temporarily stop popping new tasks out of the queue. However, any tasks already executed will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume popping tasks, set `paused` back to its default value of `false`.
+When `paused` is set to `true`, the workers will temporarily stop retrieving new tasks out of the queue. However, any tasks already executed will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume retrieving tasks, set `paused` back to its default value of `false`.
 
 Here is an example:
 
 ```cpp
-#include "thread_pool.hpp"
+#include "BS_thread_pool.hpp"
 
-synced_stream sync_out;
-thread_pool pool(4);
+BS::synced_stream sync_out;
+BS::thread_pool pool(4);
 
-void sleep_half_second(const size_t &i)
+void sleep_half_second(const size_t i)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     sync_out.println("Task ", i, " done.");
@@ -522,7 +662,7 @@ void sleep_half_second(const size_t &i)
 
 int main()
 {
-    for (size_t i = 0; i < 8; i++)
+    for (size_t i = 0; i < 8; ++i)
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 8 tasks.");
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -531,7 +671,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     sync_out.println("Still paused...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    for (size_t i = 8; i < 12; i++)
+    for (size_t i = 8; i < 12; ++i)
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 4 more tasks.");
     sync_out.println("Still paused...");
@@ -541,7 +681,7 @@ int main()
 }
 ```
 
-Assuming you have at least 4 hardware threads, the output will be similar to:
+Assuming you have at least 4 hardware threads, the output should be similar to:
 
 ```none
 Submitted 8 tasks.
@@ -569,12 +709,12 @@ Here is what happened. We initially submitted a total of 8 tasks to the queue. S
 While the workers are paused, `wait_for_tasks()` will wait for the running tasks instead of all tasks (otherwise it would wait forever). This is demonstrated by the following program:
 
 ```cpp
-#include "thread_pool.hpp"
+#include "BS_thread_pool.hpp"
 
-synced_stream sync_out;
-thread_pool pool(4);
+BS::synced_stream sync_out;
+BS::thread_pool pool(4);
 
-void sleep_half_second(const size_t &i)
+void sleep_half_second(const size_t i)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     sync_out.println("Task ", i, " done.");
@@ -582,11 +722,11 @@ void sleep_half_second(const size_t &i)
 
 int main()
 {
-    for (size_t i = 0; i < 8; i++)
+    for (size_t i = 0; i < 8; ++i)
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 8 tasks. Waiting for them to complete.");
     pool.wait_for_tasks();
-    for (size_t i = 8; i < 20; i++)
+    for (size_t i = 8; i < 20; ++i)
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 12 more tasks.");
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -642,16 +782,16 @@ All tasks completed.
 
 The first `wait_for_tasks()`, which was called with `paused == false`, waited for all 8 tasks, both running and queued. The second `wait_for_tasks()`, which was called with `paused == true`, only waited for the 4 running tasks, while the other 8 tasks remained queued, and were not executed since the pool was paused. Finally, the third `wait_for_tasks()`, which was called with `paused == false`, waited for the remaining 8 tasks, both running and queued.
 
-**Warning**: If the thread pool is destroyed while paused, any tasks still in the queue will never be executed.
+**Warning**: If the thread pool is destroyed while paused, any tasks still in the queue will never be executed!
 
 ### Exception handling
 
 `submit()` catches any exceptions thrown by the submitted task and forwards them to the corresponding future. They can then be caught when invoking the `get()` member function of the future. For example:
 
 ```cpp
-#include "thread_pool.hpp"
+#include "BS_thread_pool.hpp"
 
-double inverse(const double &x)
+double inverse(const double x)
 {
     if (x == 0)
         throw std::runtime_error("Division by zero!");
@@ -661,14 +801,14 @@ double inverse(const double &x)
 
 int main()
 {
-    thread_pool pool;
+    BS::thread_pool pool;
     auto my_future = pool.submit(inverse, 0);
     try
     {
-        double result = my_future.get();
+        const double result = my_future.get();
         std::cout << "The result is: " << result << '\n';
     }
-    catch (const std::exception &e)
+    catch (const std::exception& e)
     {
         std::cout << "Caught exception: " << e.what() << '\n';
     }
@@ -683,11 +823,11 @@ Caught exception: Division by zero!
 
 ## Testing the package
 
-The included file `thread_pool_test.cpp` will perform automated tests of all aspects of the package, and benchmark some multithreaded matrix operations. The output will be printed both to `std::cout` and to a file named `thread_pool_test-yyyy-mm-dd_hh.mm.ss.log` based on the current date and time. In addition, the code is thoroughly documented, and is meant to serve as an extensive example of how to properly use the package.
+The included file `BS_thread_pool_test.cpp` will perform automated tests of all aspects of the package, and perform simple benchmarks. The output will be printed both to `std::cout` and to a file named `BS_thread_pool_test-yyyy-mm-dd_hh.mm.ss.log` based on the current date and time. In addition, the code is thoroughly documented, and is meant to serve as an extensive example of how to properly use the package.
 
 Please make sure to:
 
-1. [Compile](#compiling-and-compatibility) `thread_pool_test.cpp` with optimization flags enabled (e.g. `-O3` on GCC / Clang or `/O2` on MSVC).
+1. [Compile](#compiling-and-compatibility) `BS_thread_pool_test.cpp` with optimization flags enabled (e.g. `-O3` on GCC / Clang or `/O2` on MSVC).
 2. Run the test without any other applications, especially multithreaded applications, running in parallel.
 
 If any of the tests fail, please [submit a bug report](https://github.com/bshoshany/thread-pool/issues) including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.
@@ -698,12 +838,12 @@ A sample output of a successful run of the automated tests is as follows:
 
 ```none
 A C++17 Thread Pool for High-Performance Scientific Computing
-(c) 2021 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
+(c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
 GitHub: https://github.com/bshoshany/thread-pool
 
-Thread pool library version is v2.0.0 (2021-08-14).
+Thread pool library version is v3.0.0 (2022-05-30).
 Hardware concurrency is 24.
-Generating log file: thread_pool_test-2021-08-14_23.34.25.log.
+Generating log file: BS_thread_pool_test-2022-05-30_22.59.30.log.
 
 Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!
 
@@ -761,43 +901,46 @@ Checking that wait_for_tasks() works...
 =======================================
 Checking that parallelize_loop() works:
 =======================================
-Verifying that a loop from -2064 to 551 with 4 tasks modifies all indices...
+Verifying that a loop from -434827 to 461429 with 23 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -658 to -77 with 19 tasks modifies all indices...
+Verifying that a loop from 255333 to -889028 with 9 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 1512 to -1046 with 1 task modifies all indices...
+Verifying that a loop from -257322 to 550471 with 5 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -2334 to -1770 with 23 tasks modifies all indices...
+Verifying that a loop from -257648 to -475958 with 23 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 1775 to -1242 with 13 tasks modifies all indices...
+Verifying that a loop from 175412 to -544672 with 13 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 846 to -506 with 14 tasks modifies all indices...
+Verifying that a loop from -244797 to -970178 with 11 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -301 to -2111 with 5 tasks modifies all indices...
+Verifying that a loop from 411251 to -718341 with 15 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 1758 to -1602 with 11 tasks modifies all indices...
+Verifying that a loop from 418787 to 978302 with 22 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 94 to -1103 with 24 tasks modifies all indices...
+Verifying that a loop from -2412 to -310158 with 4 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 612 to 2026 with 13 tasks modifies all indices...
+Verifying that a loop from -881862 to 137673 with 7 tasks modifies all indices...
 -> PASSED!
-
-======================================================
-Checking that different values of sleep_duration work:
-======================================================
-Submitting tasks with sleep_duration = 0 microseconds...
+Verifying that a loop from 539438 to -759983 with 17 tasks correctly sums all indices...
 -> PASSED!
-Submitting tasks with sleep_duration = 1909 microseconds...
+Verifying that a loop from 745706 to -519554 with 13 tasks correctly sums all indices...
 -> PASSED!
-Submitting tasks with sleep_duration = 469 microseconds...
+Verifying that a loop from 288078 to 432534 with 12 tasks correctly sums all indices...
 -> PASSED!
-Submitting tasks with sleep_duration = 964 microseconds...
+Verifying that a loop from -487251 to 302796 with 4 tasks correctly sums all indices...
 -> PASSED!
-Submitting tasks with sleep_duration = 1946 microseconds...
+Verifying that a loop from 408766 to 756890 with 3 tasks correctly sums all indices...
 -> PASSED!
-Submitting tasks with sleep_duration = 773 microseconds...
+Verifying that a loop from -976768 to -500744 with 10 tasks correctly sums all indices...
 -> PASSED!
-Resetting sleep_duration to the default value (1000 microseconds).
+Verifying that a loop from -817442 to 175967 with 6 tasks correctly sums all indices...
+-> PASSED!
+Verifying that a loop from -765007 to -53682 with 23 tasks correctly sums all indices...
+-> PASSED!
+Verifying that a loop from -903190 to -361760 with 14 tasks correctly sums all indices...
+-> PASSED!
+Verifying that a loop from 72823 to -85485 with 15 tasks correctly sums all indices...
+-> PASSED!
 
 ====================================
 Checking that task monitoring works:
@@ -806,22 +949,22 @@ Resetting pool to 4 threads.
 Submitting 12 tasks.
 After submission, should have: 12 tasks total, 4 tasks running, 8 tasks queued...
 -> PASSED!
-Task 1 released.
-Task 3 released.
 Task 0 released.
 Task 2 released.
+Task 1 released.
+Task 3 released.
 After releasing 4 tasks, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
+-> PASSED!
+Task 7 released.
 Task 5 released.
 Task 4 released.
-Task 7 released.
 Task 6 released.
--> PASSED!
 After releasing 4 more tasks, should have: 4 tasks total, 4 tasks running, 0 tasks queued...
 -> PASSED!
-Task 11 released.
+Task 10 released.
 Task 8 released.
 Task 9 released.
-Task 10 released.
+Task 11 released.
 After releasing the final 4 tasks, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
 -> PASSED!
 Resetting pool to 24 threads.
@@ -844,19 +987,19 @@ Task 0 done.
 300ms later, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
 -> PASSED!
 Pausing pool and using wait_for_tasks() to wait for the running tasks.
-Task 7 done.
-Task 5 done.
 Task 6 done.
 Task 4 done.
+Task 5 done.
+Task 7 done.
 After waiting, should have: 4 tasks total, 0 tasks running, 4 tasks queued...
 -> PASSED!
 200ms later, should still have: 4 tasks total, 0 tasks running, 4 tasks queued...
 -> PASSED!
 Unpausing pool and using wait_for_tasks() to wait for all tasks.
 Task 9 done.
-Task 8 done.
 Task 10 done.
 Task 11 done.
+Task 8 done.
 After waiting, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
 -> PASSED!
 Resetting pool to 24 threads.
@@ -867,161 +1010,86 @@ Checking that exception handling works:
 -> PASSED!
 
 ============================================================
-Testing that matrix operations produce the expected results:
+Testing that vector operations produce the expected results:
 ============================================================
-Using matrices of size 240x240 with a total of 57600 elements.
-Adding two matrices (single-threaded)...
-Adding two matrices (multithreaded)...
-Comparing the results...
+Adding two vectors with 83788 elements using 24 tasks...
 -> PASSED!
-Transposing a matrix (single-threaded)...
-Transposing a matrix (multithreaded)...
-Comparing the results...
+Adding two vectors with 595750 elements using 3 tasks...
 -> PASSED!
-Multiplying two matrices (single-threaded)...
-Multiplying two matrices (multithreaded)...
-Comparing the results...
+Adding two vectors with 738336 elements using 20 tasks...
+-> PASSED!
+Adding two vectors with 100123 elements using 24 tasks...
+-> PASSED!
+Adding two vectors with 921883 elements using 24 tasks...
+-> PASSED!
+Adding two vectors with 76713 elements using 22 tasks...
+-> PASSED!
+Adding two vectors with 891037 elements using 2 tasks...
+-> PASSED!
+Adding two vectors with 245369 elements using 17 tasks...
+-> PASSED!
+Adding two vectors with 39624 elements using 11 tasks...
+-> PASSED!
+Adding two vectors with 295307 elements using 10 tasks...
 -> PASSED!
 
 ++++++++++++++++++++++++++++++
-SUCCESS: Passed all 46 checks!
+SUCCESS: Passed all 57 checks!
 ++++++++++++++++++++++++++++++
 ```
 
 ### Performance tests
 
-If all checks passed, `thread_pool_test.cpp` will perform benchmarking of multithreaded matrix operations. Here we will present the results obtained with two different systems.
+If all checks passed, `BS_thread_pool_test.cpp` will perform simple benchmarks by filling a specific number of vectors of fixed size with random values. The program decides how many vectors to use by testing how many are needed to reach a target duration in the single-threaded test. This ensures that the test takes approximately the same amount of time on different systems, and is thus more consistent and portable.
 
-The first test was performed on a high-end desktop computer equipped with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz and 32 GB of DDR4 RAM at 3600 MHz, compiled using GCC v11.2.0 on Windows 10 build 19043.1165 with the `-O3` compiler flag. The thread pool used 22 out of 24 threads, leaving 2 threads free for the operating system - which in our tests increased performance, presumably since all 22 threads could be dedicated entirely to the test. The output was as follows:
+Once the required number of vectors has been determined, the program will test the performance of several multi-threaded tests, dividing the total number of vectors into different numbers of tasks, compare them to the performance of the single-threaded test, and indicate the maximum speedup obtained.
+
+Please note that these benchmarks are only intended to demonstrate that the package can provide a significant speedup, and it is highly recommended to perform your own benchmarks with your specific system, compiler, and code.
+
+Here we will present the results of the performance test running on a high-end desktop computer equipped with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz and 32 GB of DDR4 RAM at 3600 MHz, compiled using [GCC](https://gcc.gnu.org/) v12.1.0 ([WinLibs build](https://winlibs.com/)) on Windows 11 build 22000.675 with the `-O3` compiler flag. The output was as follows:
 
 ```none
-===================================
-Performing matrix performance test:
-===================================
-Using 22 out of 24 threads.
-Determining the optimal sleep duration........................
-Result: The optimal sleep duration is 300 microseconds.
+======================
+Performing benchmarks:
+======================
+Using 24 threads.
+Each test will be repeated 20 times to collect reliable statistics.
 
-Adding two 4400x4400 matrices 20 times:
-With   1  task, mean execution time was   39.3 ms with standard deviation  2.4 ms.
-With   5 tasks, mean execution time was   21.2 ms with standard deviation  1.7 ms.
-With  11 tasks, mean execution time was   20.4 ms with standard deviation  1.1 ms.
-With  22 tasks, mean execution time was   18.3 ms with standard deviation  1.3 ms.
-With  44 tasks, mean execution time was   17.4 ms with standard deviation  0.7 ms.
-With  88 tasks, mean execution time was   18.0 ms with standard deviation  1.0 ms.
-Maximum speedup obtained: 2.3x.
-
-Transposing one 4400x4400 matrix 20 times:
-With   1  task, mean execution time was  139.8 ms with standard deviation  3.0 ms.
-With   5 tasks, mean execution time was   38.2 ms with standard deviation  2.4 ms.
-With  11 tasks, mean execution time was   23.3 ms with standard deviation  1.8 ms.
-With  22 tasks, mean execution time was   18.9 ms with standard deviation  1.6 ms.
-With  44 tasks, mean execution time was   19.5 ms with standard deviation  1.5 ms.
-With  88 tasks, mean execution time was   18.1 ms with standard deviation  0.7 ms.
-Maximum speedup obtained: 7.7x.
-
-Multiplying two 550x550 matrices 20 times:
-With   1  task, mean execution time was  165.2 ms with standard deviation  2.5 ms.
-With   5 tasks, mean execution time was   35.9 ms with standard deviation  1.0 ms.
-With  11 tasks, mean execution time was   17.6 ms with standard deviation  0.5 ms.
-With  22 tasks, mean execution time was   10.2 ms with standard deviation  0.7 ms.
-With  44 tasks, mean execution time was   16.1 ms with standard deviation  1.4 ms.
-With  88 tasks, mean execution time was   15.4 ms with standard deviation  0.7 ms.
-Maximum speedup obtained: 16.2x.
-
-Generating random 4400x4400 matrix 20 times:
-With   1  task, mean execution time was  244.7 ms with standard deviation  2.6 ms.
-With   5 tasks, mean execution time was   51.5 ms with standard deviation  1.5 ms.
-With  11 tasks, mean execution time was   25.7 ms with standard deviation  0.9 ms.
-With  22 tasks, mean execution time was   19.1 ms with standard deviation  2.7 ms.
-With  44 tasks, mean execution time was   17.2 ms with standard deviation  2.1 ms.
-With  88 tasks, mean execution time was   15.8 ms with standard deviation  1.0 ms.
-Maximum speedup obtained: 15.5x.
-
-Overall, multithreading provided speedups of up to 16.2x.
+Generating 57320 random vectors with 500 elements each:
+Single-threaded, mean execution time was  298.2 ms with standard deviation  1.7 ms.
+With    6 tasks, mean execution time was   52.3 ms with standard deviation  1.3 ms.
+With   12 tasks, mean execution time was   30.3 ms with standard deviation  0.8 ms.
+With   24 tasks, mean execution time was   16.4 ms with standard deviation  1.2 ms.
+With   48 tasks, mean execution time was   19.2 ms with standard deviation  2.6 ms.
+With   96 tasks, mean execution time was   17.8 ms with standard deviation  1.2 ms.
+Maximum speedup obtained by multithreading vs. single-threading: 18.2x, using 24 tasks.
 
 +++++++++++++++++++++++++++++++++++++++
 Thread pool performance test completed!
 +++++++++++++++++++++++++++++++++++++++
 ```
 
-Here are some lessons we can learn from these results:
-
-* For simple element-wise operations such as addition, multithreading improves performance very modestly, only by a factor of 2.3, even when utilizing 22 threads in parallel. This is because compiler optimizations already parallelize simple loops fairly well on their own. Omitting the `-O3` optimization flag, we observed a 6.8x speedup for addition. However, the user will most likely be compiling with optimizations turned on anyway.
-* Transposition enjoys a moderate 7.7x speedup with multithreading. Note that transposition requires reading memory is non-sequential order, jumping between the rows of the source matrix, which is why, compared to sequential operations such as addition, it is much slower when single-threaded, and benefits more from multithreading.
-* Matrix multiplication and random matrix generation, which are more complicated operations that cannot be automatically parallelized by compiler optimizations, gain the most out of multithreading - with a very significant speedup by a factor of around 16 on average. Given that the test CPU only has 12 physical cores, and hyperthreading can generally produce no more than a 30% performance improvement, a 16x speedup is about as good as can be expected.
-* Using as many tasks as there are threads almost always provides the best performance. Although in some cases 44 or 88 tasks seem to provide a slightly lower mean execution time compared to 22 tasks, the difference is within less than 1 standard deviation in all cases.
-
-### Dual Intel Xeon Gold 6148 (80 threads)
-
-The second test was performed on a [Compute Canada](https://www.computecanada.ca/) node equipped with dual 20-core / 40-thread Intel Xeon Gold 6148 CPUs at 2.4 GHz (for a total of 40 cores and 80 threads) and 202 GB of RAM, compiled using GCC v9.4.0 on CentOS Linux 7.6.1810 with the `-O3` compiler flag. The thread pool consisted of 78 threads. The output was as follows:
-
-```none
-===================================
-Performing matrix performance test:
-===================================
-Using 78 out of 80 threads.
-Determining the optimal sleep duration........................
-Result: The optimal sleep duration is 1000 microseconds.
-
-Adding two 15600x15600 matrices 20 times:
-With   1  task, mean execution time was  846.1 ms with standard deviation 40.2 ms.
-With  19 tasks, mean execution time was   88.1 ms with standard deviation  8.6 ms.
-With  39 tasks, mean execution time was   73.5 ms with standard deviation  4.8 ms.
-With  78 tasks, mean execution time was   67.3 ms with standard deviation  2.2 ms.
-With 156 tasks, mean execution time was   64.9 ms with standard deviation  2.3 ms.
-With 312 tasks, mean execution time was   65.8 ms with standard deviation  1.5 ms.
-Maximum speedup obtained: 13.0x.
-
-Transposing one 15600x15600 matrix 20 times:
-With   1  task, mean execution time was 1689.4 ms with standard deviation 75.3 ms.
-With  19 tasks, mean execution time was  155.3 ms with standard deviation 19.7 ms.
-With  39 tasks, mean execution time was  115.0 ms with standard deviation 10.8 ms.
-With  78 tasks, mean execution time was   99.0 ms with standard deviation  6.0 ms.
-With 156 tasks, mean execution time was   96.2 ms with standard deviation  1.6 ms.
-With 312 tasks, mean execution time was   97.8 ms with standard deviation  1.7 ms.
-Maximum speedup obtained: 17.6x.
-
-Multiplying two 1950x1950 matrices 20 times:
-With   1  task, mean execution time was 15415.1 ms with standard deviation 672.5 ms.
-With  19 tasks, mean execution time was 1152.5 ms with standard deviation 62.8 ms.
-With  39 tasks, mean execution time was  537.9 ms with standard deviation  4.1 ms.
-With  78 tasks, mean execution time was  292.3 ms with standard deviation 42.5 ms.
-With 156 tasks, mean execution time was  936.4 ms with standard deviation 15.8 ms.
-With 312 tasks, mean execution time was  951.2 ms with standard deviation 22.3 ms.
-Maximum speedup obtained: 52.7x.
-
-Generating random 15600x15600 matrix 20 times:
-With   1  task, mean execution time was 4318.3 ms with standard deviation  6.3 ms.
-With  19 tasks, mean execution time was  260.8 ms with standard deviation 15.1 ms.
-With  39 tasks, mean execution time was  156.1 ms with standard deviation  1.6 ms.
-With  78 tasks, mean execution time was   86.2 ms with standard deviation  1.9 ms.
-With 156 tasks, mean execution time was   84.8 ms with standard deviation  0.4 ms.
-With 312 tasks, mean execution time was   85.2 ms with standard deviation  1.3 ms.
-Maximum speedup obtained: 51.0x.
-
-Overall, multithreading provided speedups of up to 52.7x.
-
-+++++++++++++++++++++++++++++++++++++++
-Thread pool performance test completed!
-+++++++++++++++++++++++++++++++++++++++
-```
-
-The speedup of around 51.9x on average for matrix multiplication and random matrix generation again matches the estimation of a 30% improvement in performance over the 40 physical CPU cores due to hyperthreading, which indicates that we are once again saturating the maximum possible performance of our system.
+This CPU has 12 physical cores, with each core providing two separate logical cores via hyperthreading, for a total of 24 threads. Without hyperthreading, we would expect a maximum theoretical speedup of 12x. With hyperthreading, one might naively expect to achieve up to a 24x speedup, but this is in fact impossible, as both logical cores share the same physical core's resources. However, generally we would expect [an estimated 30% additional speedup](https://software.intel.com/content/www/us/en/develop/articles/how-to-determine-the-effectiveness-of-hyper-threading-technology-with-an-application.html) from hyperthreading, which amounts to around 15.6x in this case. In our performance test, we see a speedup of 18.2x, saturating and even surpassing this estimated theoretical upper bound.
 
 ## Issue and pull request policy
 
 This package is under continuous and active development. If you encounter any bugs, or if you would like to request any additional features, please feel free to [open a new issue on GitHub](https://github.com/bshoshany/thread-pool/issues) and I will look into it as soon as I can.
 
-Contributions are always welcome. However, I release my projects in cumulative updates after editing them locally on my system, so my policy is not to accept any pull requests. If you open a pull request, and I decide to incorporate it into the code, I will first perform some tests to ensure that the change doesn't break anything, and then merge it into the next release of the project, possibly together with some other changes, and along with a version bump and a corresponding note in `CHANGELOG.md` with a link to the pull request.
+Contributions are always welcome. However, I release my projects in cumulative updates after editing and testing them locally on my system, so my policy is not to accept any pull requests. If you open a pull request, and I decide to incorporate your suggestion into the project, I will first modify your code to comply with the project's coding conventions (formatting, syntax, naming, comments, programming practices, etc.), and perform some tests to ensure that the change doesn't break anything. I will then merge it into the next release of the project, possibly together with some other changes. The new release will also include a note in `CHANGELOG.md` with a link to your pull request, and modifications to the documentation in `README.md` as needed.
+
+## Acknowledgements
+
+Many GitHub users have helped improve this project, directly or indirectly, via issues, pull requests, comments, and/or personal correspondence. Please see `CHANGELOG.md` for links to specific issues and pull requests that have been the most helpful. Thank you all for your contribution! :)
 
 ## Copyright and citing
 
-Copyright (c) 2021 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
+Copyright (c) 2022 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
+
+If you use the library in software of any kind, please provide a link to [the GitHub repository](https://github.com/bshoshany/thread-pool) in the source code and documentation.
 
 If you use this library in published research, please cite it as follows:
 
-* Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687), [arXiv:2105.00613](https://arxiv.org/abs/2105.00613) (May 2021)
+* Barak Shoshany, *"A C++17 Thread Pool for High-Performance Scientific Computing"*, [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687), [arXiv:2105.00613](https://arxiv.org/abs/2105.00613) (May 2021)
 
 You can use the following BibTeX entry:
 
@@ -1040,3 +1108,5 @@ You can use the following BibTeX entry:
     year          = {2021}
 }
 ```
+
+Please note that the [companion paper on arXiv](https://arxiv.org/abs/2105.00613) is updated infrequently. The paper is intended to facilitate discovery of the package by scientists who may find it useful for scientific computing purposes and to allow citing the package in scientific research, but most users should read the `README.md` file on [the GitHub repository](https://github.com/bshoshany/thread-pool) instead, as it is guaranteed to always be up to date.
