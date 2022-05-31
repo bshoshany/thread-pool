@@ -69,7 +69,7 @@ By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://bara
 * Changes to `README.md`:
     * Many sections have been rewritten and/or polished.
     * Explanations and examples of all the new features have been added.
-    * Added an acknowledgements section.
+    * Added an acknowledgments section.
 * Miscellaneous changes:
     * Added a `CITATION.bib` file (in BibTeX format) to the GitHub repository. You can use it to easily cite this package if you use it in any research papers.
     * Added a `CITATION.cff` file (in YAML format) to the GitHub repository. This should add [an option to get a citation in different formats](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-on-github/about-citation-files) directly from GitHub repository by clicking on "cite this repository" on the sidebar to the right.
