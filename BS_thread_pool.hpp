@@ -267,7 +267,7 @@ public:
                         task_promise->set_value(task(args...));
                     }
                 }
-                catch (...)
+                catch (const std::exception& ex)
                 {
                     try
                     {
@@ -290,6 +290,20 @@ public:
         std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
         task_done_cv.wait(tasks_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
         waiting = false;
+    }
+
+    void recreate_thread(std::thread::id thread_id)
+    {
+        for (concurrency_t i = 0; i < thread_count; ++i)
+        {
+            if (threads[i].get_id() == thread_id)
+            {
+                pthread_cancel(threads[i].native_handle());
+                threads[i].detach();
+                threads[i] = std::thread(&thread_pool::worker, this);
+            }
+        }
+
     }
 
     // ===========
