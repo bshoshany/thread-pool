@@ -122,7 +122,7 @@ public:
      */
     size_t get_tasks_queued() const
     {
-        const std::scoped_lock tasks_lock(tasks_mutex);
+        const std::scoped_lock<std::mutex> tasks_lock(tasks_mutex);
         return tasks.size();
     }
 
@@ -133,7 +133,7 @@ public:
      */
     size_t get_tasks_running() const
     {
-        const std::scoped_lock tasks_lock(tasks_mutex);
+        const std::scoped_lock<std::mutex> tasks_lock(tasks_mutex);
         return tasks_total - tasks.size();
     }
 
@@ -211,7 +211,7 @@ public:
     void push_task(const F& task, const A&... args)
     {
         {
-            const std::scoped_lock tasks_lock(tasks_mutex);
+            const std::scoped_lock<std::mutex> tasks_lock(tasks_mutex);
             if constexpr (sizeof...(args) == 0)
                 tasks.push(std::function<void()>(task));
             else
@@ -421,7 +421,7 @@ public:
      *
      * @param out_stream_ The output stream to print to. The default value is std::cout.
      */
-    explicit synced_stream(std::ostream& out_stream_ = std::cout) : out_stream(out_stream_) {};
+    explicit synced_stream(std::ostream& out_stream_ = std::cout) : out_stream(out_stream_) {}
 
     /**
      * @brief Print any number of items into the output stream. Ensures that no other threads print to this stream simultaneously, as long as they all exclusively use the same synced_stream object to print.
@@ -432,7 +432,7 @@ public:
     template <typename... T>
     void print(const T&... items)
     {
-        const std::scoped_lock lock(stream_mutex);
+        const std::scoped_lock<std::mutex> lock(stream_mutex);
         (out_stream << ... << items);
     }
 
