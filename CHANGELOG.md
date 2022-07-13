@@ -13,6 +13,7 @@
 By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://baraksh.com/](https://baraksh.com/))
 
 * [Version history](#version-history)
+    * [v3.1.0 (2022-07-13)](#v310-2022-07-13)
     * [v3.0.0 (2022-05-30)](#v300-2022-05-30)
     * [v2.0.0 (2021-08-14)](#v200-2021-08-14)
     * [v1.9 (2021-07-29)](#v19-2021-07-29)
@@ -27,6 +28,23 @@ By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://bara
     * [v1.0 (2021-01-15)](#v10-2021-01-15)
 
 ## Version history
+
+### v3.1.0 (2022-07-13)
+
+* `BS_thread_pool.hpp`:
+    * Fixed an issue where `wait_for_tasks()` would sometimes get stuck if `push_task()` was executed immediately before `wait_for_tasks()`.
+    * Both the thread pool constructor and the `reset()` member function now determine the number of threads to use in the pool as follows. If the parameter is a positive number, then the pool will be created with this number of threads. If the parameter is non-positive, or a parameter was not supplied, then the pool will be created with the total number of hardware threads available, as obtained from `std::thread::hardware_concurrency()`. If the latter returns a non-positive number for some reason, then the pool will be created with just one thread. See [#51](https://github.com/bshoshany/thread-pool/issues/51) and [#52](https://github.com/bshoshany/thread-pool/issues/52).
+    * Added the `[[nodiscard]]` attribute to classes and class members, in order to warn the user when accidentally discarding an important return value, such as a future or the return value of a function with no useful side-effects. For example, if you use `submit()` and don't save the future it returns, the compiler will now generate a warning. (If a future is not needed, then you should use `push_task()` instead.)
+    * Removed the `explicit` specifier from all constructors, as it prevented the default constructor from being used with static class members. See [#48](https://github.com/bshoshany/thread-pool/issues/48>).
+* `BS_thread_pool_test.cpp`:
+    * Improved `count_unique_threads()` using condition variables, to ensure that each thread in the pool runs at least one task regardless of how fast it takes to run the tasks.
+    * When appropriate, `check()` now explicitly reports what the obtained result was and what it was expected to be.
+    * `check_task_monitoring()` and `check_pausing()` now explicitly report the results of the monitoring at each step.
+    * Changed all instances of `std::vector<std::atomic<bool>>` to `std::unique_ptr<std::atomic<bool>[]>`. See [#44](https://github.com/bshoshany/thread-pool/issues/44).
+    * Converted a few more C-style casts to C++ cast expressions.
+* `README.md`:
+    * Added instructions for using this package with the [Conan](https://conan.io/) C/C++ package manager. Please refer to [this package's page on ConanCenter](https://conan.io/center/bshoshany-thread-pool) to learn how to use Conan to include this package in your project with various build systems.
+* If you found this project useful, please consider [starring it on GitHub](https://github.com/bshoshany/thread-pool/stargazers)! This allows me to see how many people are using my code, and motivates me to keep working to improve it.
 
 ### v3.0.0 (2022-05-30)
 

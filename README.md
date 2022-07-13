@@ -10,15 +10,19 @@
 
 # `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
-Documentation for v3.0.0 (2022-05-30)
+By Barak Shoshany<br />
+Email: [baraksh@gmail.com](mailto:baraksh@gmail.com)<br />
+Website: [https://baraksh.com/](https://baraksh.com/)<br />
+GitHub: [https://github.com/bshoshany](https://github.com/bshoshany)<br />
 
-By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://baraksh.com/](https://baraksh.com/))
+This is the complete documentation for v3.1.0 of the library, released on 2022-07-13.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
     * [Overview of features](#overview-of-features)
     * [Compiling and compatibility](#compiling-and-compatibility)
     * [Installing using vcpkg](#installing-using-vcpkg)
+    * [Installing using Conan](#installing-using-conan)
 * [Getting started](#getting-started)
     * [Including the library](#including-the-library)
     * [Constructors](#constructors)
@@ -41,9 +45,11 @@ By Barak Shoshany ([baraksh@gmail.com](mailto:baraksh@gmail.com)) ([https://bara
 * [Testing the package](#testing-the-package)
     * [Automated tests](#automated-tests)
     * [Performance tests](#performance-tests)
-* [Issue and pull request policy](#issue-and-pull-request-policy)
-* [Acknowledgements](#acknowledgements)
-* [Copyright and citing](#copyright-and-citing)
+* [About the project](#about-the-project)
+    * [Issue and pull request policy](#issue-and-pull-request-policy)
+    * [Acknowledgements](#acknowledgements)
+    * [Starring the repository](#starring-the-repository)
+    * [Copyright and citing](#copyright-and-citing)
 
 ## Introduction
 
@@ -97,11 +103,10 @@ Other, more advanced multithreading libraries may offer more features and/or hig
 
 This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available. Compatibility was verified with a 12-core / 24-thread AMD Ryzen 9 3900X CPU using the following compilers and platforms:
 
-* Windows 11 build 22000.675:
+* Windows 11 build 22000.795:
     * [GCC](https://gcc.gnu.org/) v12.1.0 ([WinLibs build](https://winlibs.com/))
-    * [Clang](https://clang.llvm.org/) v14.0.4
-    * [Intel oneAPI C++ Compiler](https://software.intel.com/content/www/us/en/develop/tools/oneapi/components/dpc-compiler.html) v2022.1.0
-    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.32.31329
+    * [Clang](https://clang.llvm.org/) v14.0.6
+    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.32.31332
 * Ubuntu 22.04 LTS:
     * [GCC](https://gcc.gnu.org/) v12.0.1
     * [Clang](https://clang.llvm.org/) v14.0.0
@@ -123,6 +128,7 @@ For maximum performance, it is recommended to compile with all available compile
 * For MSVC, use `/O2`.
 
 As an example, to compile the test program `BS_thread_pool_test.cpp` with warnings and optimizations, it is recommended to use the following commands:
+
 * On Windows with MSVC: `cl BS_thread_pool_test.cpp /std:c++17 /permissive- /O2 /W4 /EHsc /Fe:BS_thread_pool_test.exe`
 * On Linux with GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -pthread -o BS_thread_pool_test`
 
@@ -145,6 +151,10 @@ On Windows:
 The thread pool will then be available automatically in the build system you integrated vcpkg with (e.g. MSBuild or CMake). Simply write `#include "BS_thread_pool.hpp"` in any project to use the thread pool, without having to copy to file into the project first. I will update the vcpkg port with each new release, so it will be updated automatically when you run `vcpkg upgrade`.
 
 Please see the [vcpkg repository](https://github.com/microsoft/vcpkg) for more information on how to use vcpkg.
+
+### Installing using Conan
+
+If you are using the [Conan](https://conan.io/) C/C++ package manager, please refer to [this package's page on ConanCenter](https://conan.io/center/bshoshany-thread-pool) to learn how to use Conan to include this package in your project with various build systems.
 
 ## Getting started
 
@@ -197,7 +207,7 @@ std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION << ".\n
 Sample output:
 
 ```none
-Thread pool library version is v3.0.0 (2022-05-30).
+Thread pool library version is v3.1.0 (2022-07-13).
 ```
 
 This can be used, for example, to allow the same code to work with several incompatible versions of the library.
@@ -837,13 +847,13 @@ If any of the tests fail, please [submit a bug report](https://github.com/bshosh
 A sample output of a successful run of the automated tests is as follows:
 
 ```none
-A C++17 Thread Pool for High-Performance Scientific Computing
+BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library
 (c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
 GitHub: https://github.com/bshoshany/thread-pool
 
-Thread pool library version is v3.0.0 (2022-05-30).
+Thread pool library version is v3.1.0 (2022-07-13).
 Hardware concurrency is 24.
-Generating log file: BS_thread_pool_test-2022-05-30_22.59.30.log.
+Generating log file: BS_thread_pool_test-2022-07-13_19.39.37.log.
 
 Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!
 
@@ -851,21 +861,21 @@ Important: Please do not run any other applications, especially multithreaded ap
 Checking that the constructor works:
 ====================================
 Checking that the thread pool reports a number of threads equal to the hardware concurrency...
--> PASSED!
+Expected: 24, obtained: 24 -> PASSED!
 Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...
--> PASSED!
+Expected: 24, obtained: 24 -> PASSED!
 
 ============================
 Checking that reset() works:
 ============================
 Checking that after reset() the thread pool reports a number of threads equal to half the hardware concurrency...
--> PASSED!
+Expected: 12, obtained: 12 -> PASSED!
 Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...
--> PASSED!
+Expected: 12, obtained: 12 -> PASSED!
 Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...
--> PASSED!
+Expected: 24, obtained: 24 -> PASSED!
 Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...
--> PASSED!
+Expected: 24, obtained: 24 -> PASSED!
 
 ================================
 Checking that push_task() works:
@@ -896,51 +906,52 @@ Checking that submit() works for a function with two arguments and a return valu
 =======================================
 Checking that wait_for_tasks() works...
 =======================================
+Waiting for tasks...
 -> PASSED!
 
 =======================================
 Checking that parallelize_loop() works:
 =======================================
-Verifying that a loop from -434827 to 461429 with 23 tasks modifies all indices...
+Verifying that a loop from 839486 to 578526 with 7 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 255333 to -889028 with 9 tasks modifies all indices...
+Verifying that a loop from 913636 to 945504 with 22 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -257322 to 550471 with 5 tasks modifies all indices...
+Verifying that a loop from 963330 to 578092 with 14 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -257648 to -475958 with 23 tasks modifies all indices...
+Verifying that a loop from -520582 to -565322 with 9 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 175412 to -544672 with 13 tasks modifies all indices...
+Verifying that a loop from 374827 to 785635 with 12 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -244797 to -970178 with 11 tasks modifies all indices...
+Verifying that a loop from 453412 to 368063 with 7 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 411251 to -718341 with 15 tasks modifies all indices...
+Verifying that a loop from 557509 to -437850 with 18 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 418787 to 978302 with 22 tasks modifies all indices...
+Verifying that a loop from -11443 to 743510 with 2 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -2412 to -310158 with 4 tasks modifies all indices...
+Verifying that a loop from -724659 to -27497 with 20 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from -881862 to 137673 with 7 tasks modifies all indices...
+Verifying that a loop from -790047 to -124851 with 18 tasks modifies all indices...
 -> PASSED!
-Verifying that a loop from 539438 to -759983 with 17 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from 745706 to -519554 with 13 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from 288078 to 432534 with 12 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from -487251 to 302796 with 4 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from 408766 to 756890 with 3 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from -976768 to -500744 with 10 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from -817442 to 175967 with 6 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from -765007 to -53682 with 23 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from -903190 to -361760 with 14 tasks correctly sums all indices...
--> PASSED!
-Verifying that a loop from 72823 to -85485 with 15 tasks correctly sums all indices...
--> PASSED!
+Verifying that a loop from 800644 to 589779 with 24 tasks correctly sums all indices...
+Expected: 293191335030, obtained: 293191335030 -> PASSED!
+Verifying that a loop from 74965 to 444791 with 23 tasks correctly sums all indices...
+Expected: 192218912630, obtained: 192218912630 -> PASSED!
+Verifying that a loop from 480099 to -851639 with 22 tasks correctly sums all indices...
+Expected: -494795268258, obtained: -494795268258 -> PASSED!
+Verifying that a loop from 213814 to 751751 with 15 tasks correctly sums all indices...
+Expected: 519412601468, obtained: 519412601468 -> PASSED!
+Verifying that a loop from 839817 to 51524 with 8 tasks correctly sums all indices...
+Expected: 702637082620, obtained: 702637082620 -> PASSED!
+Verifying that a loop from -736549 to -495131 with 21 tasks correctly sums all indices...
+Expected: -297349963658, obtained: -297349963658 -> PASSED!
+Verifying that a loop from -581483 to 982787 with 20 tasks correctly sums all indices...
+Expected: 627746243810, obtained: 627746243810 -> PASSED!
+Verifying that a loop from -991418 to -777388 with 21 tasks correctly sums all indices...
+Expected: -378577762210, obtained: -378577762210 -> PASSED!
+Verifying that a loop from -917643 to -429950 with 1 task correctly sums all indices...
+Expected: -657212160642, obtained: -657212160642 -> PASSED!
+Verifying that a loop from -473648 to -218320 with 18 tasks correctly sums all indices...
+Expected: -176679060832, obtained: -176679060832 -> PASSED!
 
 ====================================
 Checking that task monitoring works:
@@ -948,25 +959,25 @@ Checking that task monitoring works:
 Resetting pool to 4 threads.
 Submitting 12 tasks.
 After submission, should have: 12 tasks total, 4 tasks running, 8 tasks queued...
--> PASSED!
+Result: 12 tasks total, 4 tasks running, 8 tasks queued -> PASSED!
 Task 0 released.
 Task 2 released.
 Task 1 released.
 Task 3 released.
 After releasing 4 tasks, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
--> PASSED!
-Task 7 released.
+Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
 Task 5 released.
-Task 4 released.
+Task 7 released.
 Task 6 released.
+Task 4 released.
 After releasing 4 more tasks, should have: 4 tasks total, 4 tasks running, 0 tasks queued...
--> PASSED!
+Result: 4 tasks total, 4 tasks running, 0 tasks queued -> PASSED!
 Task 10 released.
-Task 8 released.
 Task 9 released.
 Task 11 released.
+Task 8 released.
 After releasing the final 4 tasks, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
--> PASSED!
+Result: 0 tasks total, 0 tasks running, 0 tasks queued -> PASSED!
 Resetting pool to 24 threads.
 
 ============================
@@ -976,61 +987,62 @@ Resetting pool to 4 threads.
 Pausing pool.
 Submitting 12 tasks, each one waiting for 200ms.
 Immediately after submission, should have: 12 tasks total, 0 tasks running, 12 tasks queued...
--> PASSED!
+Result: 12 tasks total, 0 tasks running, 12 tasks queued -> PASSED!
 300ms later, should still have: 12 tasks total, 0 tasks running, 12 tasks queued...
--> PASSED!
+Result: 12 tasks total, 0 tasks running, 12 tasks queued -> PASSED!
 Unpausing pool.
 Task 1 done.
-Task 2 done.
 Task 3 done.
 Task 0 done.
+Task 2 done.
 300ms later, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
--> PASSED!
+Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
 Pausing pool and using wait_for_tasks() to wait for the running tasks.
-Task 6 done.
-Task 4 done.
 Task 5 done.
+Task 6 done.
 Task 7 done.
+Task 4 done.
 After waiting, should have: 4 tasks total, 0 tasks running, 4 tasks queued...
--> PASSED!
+Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 200ms later, should still have: 4 tasks total, 0 tasks running, 4 tasks queued...
--> PASSED!
+Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 Unpausing pool and using wait_for_tasks() to wait for all tasks.
 Task 9 done.
-Task 10 done.
 Task 11 done.
 Task 8 done.
+Task 10 done.
 After waiting, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
--> PASSED!
+Result: 0 tasks total, 0 tasks running, 0 tasks queued -> PASSED!
 Resetting pool to 24 threads.
 
 =======================================
 Checking that exception handling works:
 =======================================
+Throwing exception...
 -> PASSED!
 
 ============================================================
 Testing that vector operations produce the expected results:
 ============================================================
-Adding two vectors with 83788 elements using 24 tasks...
+Adding two vectors with 817976 elements using 4 tasks...
 -> PASSED!
-Adding two vectors with 595750 elements using 3 tasks...
+Adding two vectors with 525623 elements using 23 tasks...
 -> PASSED!
-Adding two vectors with 738336 elements using 20 tasks...
+Adding two vectors with 75250 elements using 7 tasks...
 -> PASSED!
-Adding two vectors with 100123 elements using 24 tasks...
+Adding two vectors with 255236 elements using 24 tasks...
 -> PASSED!
-Adding two vectors with 921883 elements using 24 tasks...
+Adding two vectors with 791117 elements using 3 tasks...
 -> PASSED!
-Adding two vectors with 76713 elements using 22 tasks...
+Adding two vectors with 568990 elements using 7 tasks...
 -> PASSED!
-Adding two vectors with 891037 elements using 2 tasks...
+Adding two vectors with 799419 elements using 23 tasks...
 -> PASSED!
-Adding two vectors with 245369 elements using 17 tasks...
+Adding two vectors with 460301 elements using 13 tasks...
 -> PASSED!
-Adding two vectors with 39624 elements using 11 tasks...
+Adding two vectors with 508493 elements using 19 tasks...
 -> PASSED!
-Adding two vectors with 295307 elements using 10 tasks...
+Adding two vectors with 196258 elements using 2 tasks...
 -> PASSED!
 
 ++++++++++++++++++++++++++++++
@@ -1071,17 +1083,23 @@ Thread pool performance test completed!
 
 This CPU has 12 physical cores, with each core providing two separate logical cores via hyperthreading, for a total of 24 threads. Without hyperthreading, we would expect a maximum theoretical speedup of 12x. With hyperthreading, one might naively expect to achieve up to a 24x speedup, but this is in fact impossible, as both logical cores share the same physical core's resources. However, generally we would expect [an estimated 30% additional speedup](https://software.intel.com/content/www/us/en/develop/articles/how-to-determine-the-effectiveness-of-hyper-threading-technology-with-an-application.html) from hyperthreading, which amounts to around 15.6x in this case. In our performance test, we see a speedup of 18.2x, saturating and even surpassing this estimated theoretical upper bound.
 
-## Issue and pull request policy
+## About the project
+
+### Issue and pull request policy
 
 This package is under continuous and active development. If you encounter any bugs, or if you would like to request any additional features, please feel free to [open a new issue on GitHub](https://github.com/bshoshany/thread-pool/issues) and I will look into it as soon as I can.
 
 Contributions are always welcome. However, I release my projects in cumulative updates after editing and testing them locally on my system, so my policy is not to accept any pull requests. If you open a pull request, and I decide to incorporate your suggestion into the project, I will first modify your code to comply with the project's coding conventions (formatting, syntax, naming, comments, programming practices, etc.), and perform some tests to ensure that the change doesn't break anything. I will then merge it into the next release of the project, possibly together with some other changes. The new release will also include a note in `CHANGELOG.md` with a link to your pull request, and modifications to the documentation in `README.md` as needed.
 
-## Acknowledgements
+### Acknowledgements
 
 Many GitHub users have helped improve this project, directly or indirectly, via issues, pull requests, comments, and/or personal correspondence. Please see `CHANGELOG.md` for links to specific issues and pull requests that have been the most helpful. Thank you all for your contribution! :)
 
-## Copyright and citing
+### Starring the repository
+
+If you found this project useful, please consider [starring it on GitHub](https://github.com/bshoshany/thread-pool/stargazers)! This allows me to see how many people are using my code, and motivates me to keep working to improve it.
+
+### Copyright and citing
 
 Copyright (c) 2022 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
 
