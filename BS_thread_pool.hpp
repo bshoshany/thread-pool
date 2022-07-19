@@ -292,6 +292,14 @@ public:
         waiting = false;
     }
 
+    /**
+     * @brief Return a reference to the thread with a given index. Manipulating the returned thread may break the semantics of the pool. This function is primarily intended to access the native_handle for implementing platform-specific behaviour (e.g. setting thread names).
+     */
+    [[nodiscard]] std::thread& get_thread(size_t thread_idx)
+    {
+        return threads[thread_idx];
+    }
+
     // ===========
     // Public data
     // ===========
