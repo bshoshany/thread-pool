@@ -49,16 +49,27 @@ public:
     multi_future(const size_t num_futures_ = 0) : f(num_futures_) {}
 
     /**
-     * @brief Get the results from all the futures stored in this multi_future object.
+     * @brief Get the results from all the futures stored in this multi_future object, re-throwing any stored exceptions.
      *
      * @return A vector containing the results.
      */
-    [[nodiscard]] std::vector<T> get()
+    template<typename V = T>
+    [[nodiscard]] std::enable_if_t<!std::is_same_v<void, V>, std::vector<T>> get()
     {
         std::vector<T> results(f.size());
         for (size_t i = 0; i < f.size(); ++i)
             results[i] = f[i].get();
         return results;
+    }
+
+    /**
+     * @brief Get the results from all the void futures stored in this multi_future object, re-throwing any stored exceptions.
+     */
+    template<typename V = T>
+    std::enable_if_t<std::is_same_v<void, V>, void> get()
+    {
+        for (size_t i = 0; i < f.size(); ++i)
+            f[i].get();
     }
 
     /**
