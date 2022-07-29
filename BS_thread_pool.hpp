@@ -3,39 +3,50 @@
 /**
  * @file BS_thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.1.0
- * @date 2022-07-13
+ * @version 3.2.0
+ * @date 2022-07-28
  * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
- * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains the entire library, including the main BS::thread_pool class and the helper classes BS::multi_future, BS:synced_stream, and BS::timer.
+ * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains the entire library, including the main BS::thread_pool class and the helper classes BS::multi_future, BS::blocks, BS:synced_stream, and BS::timer.
  */
 
-#define BS_THREAD_POOL_VERSION "v3.1.0 (2022-07-13)"
+#define BS_THREAD_POOL_VERSION "v3.2.0 (2022-07-28)"
 
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
 #include <condition_variable> // std::condition_variable
 #include <exception>          // std::current_exception
-#include <functional>         // std::function
+#include <functional>         // std::bind, std::function, std::invoke
 #include <future>             // std::future, std::promise
-#include <iostream>           // std::cout, std::ostream
+#include <iostream>           // std::cout, std::endl, std::flush, std::ostream
 #include <memory>             // std::make_shared, std::make_unique, std::shared_ptr, std::unique_ptr
 #include <mutex>              // std::mutex, std::scoped_lock, std::unique_lock
 #include <queue>              // std::queue
 #include <thread>             // std::thread
-#include <type_traits>        // std::common_type_t, std::decay_t, std::is_void_v, std::invoke_result_t
-#include <utility>            // std::move, std::swap
+#include <type_traits>        // std::common_type_t, std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v
+#include <utility>            // std::forward, std::move, std::swap
 #include <vector>             // std::vector
 
 namespace BS
 {
+/**
+ * @brief A convenient shorthand for the type of std::thread::hardware_concurrency(). Should evaluate to unsigned int.
+ */
 using concurrency_t = std::invoke_result_t<decltype(std::thread::hardware_concurrency)>;
 
+/**
+ * @brief Explicit casts of the flushing stream manipulators, to enable using them with synced_stream, e.g. sync_out.print(BS::flush).
+ */
+std::ostream& (&endl)(std::ostream&) = static_cast<std::ostream& (&)(std::ostream&)>(std::endl);
+std::ostream& (&flush)(std::ostream&) = static_cast<std::ostream& (&)(std::ostream&)>(std::flush);
+
 // ============================================================================================= //
-//                                    Begin class multi_future                                    //
+//                                    Begin class multi_future                                   //
 
 /**
  * @brief A helper class to facilitate waiting for and/or getting the results of multiple futures at once.
+ *
+ * @tparam T The return type of the futures.
  */
 template <typename T>
 class [[nodiscard]] multi_future
@@ -49,16 +60,25 @@ public:
     multi_future(const size_t num_futures_ = 0) : f(num_futures_) {}
 
     /**
-     * @brief Get the results from all the futures stored in this multi_future object.
+     * @brief Get the results from all the futures stored in this multi_future object, rethrowing any stored exceptions.
      *
-     * @return A vector containing the results.
+     * @return If the futures return void, this function returns void as well. Otherwise, it returns a vector containing the results.
      */
-    [[nodiscard]] std::vector<T> get()
+    [[nodiscard]] std::conditional_t<std::is_void_v<T>, void, std::vector<T>> get()
     {
-        std::vector<T> results(f.size());
-        for (size_t i = 0; i < f.size(); ++i)
-            results[i] = f[i].get();
-        return results;
+        if constexpr (std::is_void_v<T>)
+        {
+            for (size_t i = 0; i < f.size(); ++i)
+                f[i].get();
+            return;
+        }
+        else
+        {
+            std::vector<T> results(f.size());
+            for (size_t i = 0; i < f.size(); ++i)
+                results[i] = f[i].get();
+            return results;
+        }
     }
 
     /**
@@ -76,7 +96,113 @@ public:
     std::vector<std::future<T>> f;
 };
 
-//                                     End class multi_future                                     //
+//                                     End class multi_future                                    //
+// ============================================================================================= //
+
+// ============================================================================================= //
+//                                       Begin class blocks                                      //
+
+/**
+ * @brief A helper class to divide a range into blocks. Used by parallelize_loop() and push_loop().
+ *
+ * @tparam T1 The type of the first index in the range. Should be a signed or unsigned integer.
+ * @tparam T2 The type of the index after the last index in the range. Should be a signed or unsigned integer. If T1 is not the same as T2, a common type will be automatically inferred.
+ * @tparam T The common type of T1 and T2.
+ */
+template <typename T1, typename T2, typename T = std::common_type_t<T1, T2>>
+class [[nodiscard]] blocks
+{
+public:
+    /**
+     * @brief Construct a blocks object with the given specifications.
+     *
+     * @param first_index_ The first index in the range.
+     * @param index_after_last_ The index after the last index in the range.
+     * @param num_blocks_ The desired number of blocks to divide the range into.
+     */
+    blocks(const T1 first_index_, const T2 index_after_last_, const size_t num_blocks_) : first_index(static_cast<T>(first_index_)), index_after_last(static_cast<T>(index_after_last_)), num_blocks(num_blocks_)
+    {
+        if (index_after_last < first_index)
+            std::swap(index_after_last, first_index);
+        total_size = static_cast<size_t>(index_after_last - first_index);
+        block_size = static_cast<size_t>(total_size / num_blocks);
+        if (block_size == 0)
+        {
+            block_size = 1;
+            num_blocks = (total_size > 1) ? total_size : 1;
+        }
+    }
+
+    /**
+     * @brief Get the first index of a block.
+     *
+     * @param i The block number.
+     * @return The first index.
+     */
+    [[nodiscard]] T start(const size_t i) const
+    {
+        return static_cast<T>(i * block_size) + first_index;
+    }
+
+    /**
+     * @brief Get the index after the last index of a block.
+     *
+     * @param i The block number.
+     * @return The index after the last index.
+     */
+    [[nodiscard]] T end(const size_t i) const
+    {
+        return (i == num_blocks - 1) ? index_after_last : (static_cast<T>((i + 1) * block_size) + first_index);
+    }
+
+    /**
+     * @brief Get the number of blocks. Note that this may be different than the desired number of blocks that was passed to the constructor.
+     *
+     * @return The number of blocks.
+     */
+    [[nodiscard]] size_t get_num_blocks() const
+    {
+        return num_blocks;
+    }
+
+    /**
+     * @brief Get the total number of indices in the range.
+     *
+     * @return The total number of indices.
+     */
+    [[nodiscard]] size_t get_total_size() const
+    {
+        return total_size;
+    }
+
+private:
+    /**
+     * @brief The size of each block (except possibly the last block).
+     */
+    size_t block_size = 0;
+
+    /**
+     * @brief The first index in the range.
+     */
+    T first_index = 0;
+
+    /**
+     * @brief The index after the last index in the range.
+     */
+    T index_after_last = 0;
+
+    /**
+     * @brief The number of blocks.
+     */
+    size_t num_blocks = 0;
+
+    /**
+     * @brief The total number of indices in the range.
+     */
+    size_t total_size = 0;
+};
+
+//                                        End class blocks                                       //
 // ============================================================================================= //
 
 // ============================================================================================= //
@@ -158,7 +284,7 @@ public:
     }
 
     /**
-     * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue.
+     * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue. Returns a multi_future object that contains the futures for all of the blocks.
      *
      * @tparam F The type of the function to loop through.
      * @tparam T1 The type of the first index in the loop. Should be a signed or unsigned integer.
@@ -166,56 +292,98 @@ public:
      * @tparam T The common type of T1 and T2.
      * @tparam R The return value of the loop function F (can be void).
      * @param first_index The first index in the loop.
-     * @param index_after_last The index after the last index in the loop. The loop will iterate from first_index to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = first_index; i < index_after_last; ++i)". Note that if first_index == index_after_last, no blocks will be submitted.
+     * @param index_after_last The index after the last index in the loop. The loop will iterate from first_index to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = first_index; i < index_after_last; ++i)". Note that if index_after_last == first_index, no blocks will be submitted.
      * @param loop The function to loop through. Will be called once per block. Should take exactly two arguments: the first index in the block and the index after the last index in the block. loop(start, end) should typically involve a loop of the form "for (T i = start; i < end; ++i)".
      * @param num_blocks The maximum number of blocks to split the loop into. The default is to use the number of threads in the pool.
-     * @return A multi_future object that can be used to wait for all the blocks to finish. If the loop function returns a value, the multi_future object can be used to obtain the values returned by each block.
+     * @return A multi_future object that can be used to wait for all the blocks to finish. If the loop function returns a value, the multi_future object can also be used to obtain the values returned by each block.
      */
     template <typename F, typename T1, typename T2, typename T = std::common_type_t<T1, T2>, typename R = std::invoke_result_t<std::decay_t<F>, T, T>>
-    [[nodiscard]] multi_future<R> parallelize_loop(const T1& first_index, const T2& index_after_last, const F& loop, size_t num_blocks = 0)
+    [[nodiscard]] multi_future<R> parallelize_loop(const T1 first_index, const T2 index_after_last, F&& loop, const size_t num_blocks = 0)
     {
-        T first_index_T = static_cast<T>(first_index);
-        T index_after_last_T = static_cast<T>(index_after_last);
-        if (first_index_T == index_after_last_T)
+        blocks blks(first_index, index_after_last, num_blocks ? num_blocks : thread_count);
+        if (blks.get_total_size() > 0)
+        {
+            multi_future<R> mf(blks.get_num_blocks());
+            for (size_t i = 0; i < blks.get_num_blocks(); ++i)
+                mf.f[i] = submit(std::forward<F>(loop), blks.start(i), blks.end(i));
+            return mf;
+        }
+        else
+        {
             return multi_future<R>();
-        if (index_after_last_T < first_index_T)
-            std::swap(index_after_last_T, first_index_T);
-        if (num_blocks == 0)
-            num_blocks = thread_count;
-        const size_t total_size = static_cast<size_t>(index_after_last_T - first_index_T);
-        size_t block_size = static_cast<size_t>(total_size / num_blocks);
-        if (block_size == 0)
-        {
-            block_size = 1;
-            num_blocks = total_size > 1 ? total_size : 1;
         }
-        multi_future<R> mf(num_blocks);
-        for (size_t i = 0; i < num_blocks; ++i)
-        {
-            const T start = (static_cast<T>(i * block_size) + first_index_T);
-            const T end = (i == num_blocks - 1) ? index_after_last_T : (static_cast<T>((i + 1) * block_size) + first_index_T);
-            mf.f[i] = submit(loop, start, end);
-        }
-        return mf;
     }
 
     /**
-     * @brief Push a function with zero or more arguments, but no return value, into the task queue.
+     * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue. Returns a multi_future object that contains the futures for all of the blocks. This overload is used for the special case where the first index is 0.
+     *
+     * @tparam F The type of the function to loop through.
+     * @tparam T The type of the loop indices. Should be a signed or unsigned integer.
+     * @tparam R The return value of the loop function F (can be void).
+     * @param index_after_last The index after the last index in the loop. The loop will iterate from 0 to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = 0; i < index_after_last; ++i)". Note that if index_after_last == 0, no blocks will be submitted.
+     * @param loop The function to loop through. Will be called once per block. Should take exactly two arguments: the first index in the block and the index after the last index in the block. loop(start, end) should typically involve a loop of the form "for (T i = start; i < end; ++i)".
+     * @param num_blocks The maximum number of blocks to split the loop into. The default is to use the number of threads in the pool.
+     * @return A multi_future object that can be used to wait for all the blocks to finish. If the loop function returns a value, the multi_future object can also be used to obtain the values returned by each block.
+     */
+    template <typename F, typename T, typename R = std::invoke_result_t<std::decay_t<F>, T, T>>
+    [[nodiscard]] multi_future<R> parallelize_loop(const T index_after_last, F&& loop, const size_t num_blocks = 0)
+    {
+        return parallelize_loop(0, index_after_last, std::forward<F>(loop), num_blocks);
+    }
+
+    /**
+     * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue. Does not return a multi_future, so the user must use wait_for_tasks() or some other method to ensure that the loop finishes executing, otherwise bad things will happen.
+     *
+     * @tparam F The type of the function to loop through.
+     * @tparam T1 The type of the first index in the loop. Should be a signed or unsigned integer.
+     * @tparam T2 The type of the index after the last index in the loop. Should be a signed or unsigned integer. If T1 is not the same as T2, a common type will be automatically inferred.
+     * @tparam T The common type of T1 and T2.
+     * @param first_index The first index in the loop.
+     * @param index_after_last The index after the last index in the loop. The loop will iterate from first_index to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = first_index; i < index_after_last; ++i)". Note that if index_after_last == first_index, no blocks will be submitted.
+     * @param loop The function to loop through. Will be called once per block. Should take exactly two arguments: the first index in the block and the index after the last index in the block. loop(start, end) should typically involve a loop of the form "for (T i = start; i < end; ++i)".
+     * @param num_blocks The maximum number of blocks to split the loop into. The default is to use the number of threads in the pool.
+     */
+    template <typename F, typename T1, typename T2, typename T = std::common_type_t<T1, T2>>
+    void push_loop(const T1 first_index, const T2 index_after_last, F&& loop, const size_t num_blocks = 0)
+    {
+        blocks blks(first_index, index_after_last, num_blocks ? num_blocks : thread_count);
+        if (blks.get_total_size() > 0)
+        {
+            for (size_t i = 0; i < blks.get_num_blocks(); ++i)
+                push_task(std::forward<F>(loop), blks.start(i), blks.end(i));
+        }
+    }
+
+    /**
+     * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue. Does not return a multi_future, so the user must use wait_for_tasks() or some other method to ensure that the loop finishes executing, otherwise bad things will happen. This overload is used for the special case where the first index is 0.
+     *
+     * @tparam F The type of the function to loop through.
+     * @tparam T The type of the loop indices. Should be a signed or unsigned integer.
+     * @param index_after_last The index after the last index in the loop. The loop will iterate from 0 to (index_after_last - 1) inclusive. In other words, it will be equivalent to "for (T i = 0; i < index_after_last; ++i)". Note that if index_after_last == 0, no blocks will be submitted.
+     * @param loop The function to loop through. Will be called once per block. Should take exactly two arguments: the first index in the block and the index after the last index in the block. loop(start, end) should typically involve a loop of the form "for (T i = start; i < end; ++i)".
+     * @param num_blocks The maximum number of blocks to split the loop into. The default is to use the number of threads in the pool.
+     */
+    template <typename F, typename T>
+    void push_loop(const T index_after_last, F&& loop, const size_t num_blocks = 0)
+    {
+        push_loop(0, index_after_last, std::forward<F>(loop), num_blocks);
+    }
+
+    /**
+     * @brief Push a function with zero or more arguments, but no return value, into the task queue. Does not return a future, so the user must use wait_for_tasks() or some other method to ensure that the task finishes executing, otherwise bad things will happen.
      *
      * @tparam F The type of the function.
      * @tparam A The types of the arguments.
      * @param task The function to push.
-     * @param args The arguments to pass to the function.
+     * @param args The zero or more arguments to pass to the function. Note that if the task is a class member function, the first argument must be a pointer to the object, i.e. &object (or this), followed by the actual arguments.
      */
     template <typename F, typename... A>
-    void push_task(const F& task, const A&... args)
+    void push_task(F&& task, A&&... args)
     {
+        std::function<void()> task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...);
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
-            if constexpr (sizeof...(args) == 0)
-                tasks.push(std::function<void()>(task));
-            else
-                tasks.push(std::function<void()>([task, args...] { task(args...); }));
+            tasks.push(task_function);
         }
         ++tasks_total;
         task_available_cv.notify_one();
@@ -245,26 +413,27 @@ public:
      * @tparam A The types of the zero or more arguments to pass to the function.
      * @tparam R The return type of the function (can be void).
      * @param task The function to submit.
-     * @param args The zero or more arguments to pass to the function.
+     * @param args The zero or more arguments to pass to the function. Note that if the task is a class member function, the first argument must be a pointer to the object, i.e. &object (or this), followed by the actual arguments.
      * @return A future to be used later to wait for the function to finish executing and/or obtain its returned value if it has one.
      */
     template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
-    [[nodiscard]] std::future<R> submit(const F& task, const A&... args)
+    [[nodiscard]] std::future<R> submit(F&& task, A&&... args)
     {
+        std::function<R()> task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...);
         std::shared_ptr<std::promise<R>> task_promise = std::make_shared<std::promise<R>>();
         push_task(
-            [task, args..., task_promise]
+            [task_function, task_promise]
             {
                 try
                 {
                     if constexpr (std::is_void_v<R>)
                     {
-                        task(args...);
+                        std::invoke(task_function);
                         task_promise->set_value();
                     }
                     else
                     {
-                        task_promise->set_value(task(args...));
+                        task_promise->set_value(std::invoke(task_function));
                     }
                 }
                 catch (...)
@@ -359,7 +528,7 @@ private:
         {
             std::function<void()> task;
             std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-            task_available_cv.wait(tasks_lock, [&] { return !tasks.empty() || !running; });
+            task_available_cv.wait(tasks_lock, [this] { return !tasks.empty() || !running; });
             if (running && !paused)
             {
                 task = std::move(tasks.front());
@@ -450,10 +619,10 @@ public:
      * @param items The items to print.
      */
     template <typename... T>
-    void print(const T&... items)
+    void print(T&&... items)
     {
         const std::scoped_lock lock(stream_mutex);
-        (out_stream << ... << items);
+        (out_stream << ... << std::forward<T>(items));
     }
 
     /**
@@ -463,9 +632,9 @@ public:
      * @param items The items to print.
      */
     template <typename... T>
-    void println(const T&... items)
+    void println(T&&... items)
     {
-        print(items..., '\n');
+        print(std::forward<T>(items)..., '\n');
     }
 
 private:

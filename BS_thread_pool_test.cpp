@@ -1,8 +1,8 @@
 /**
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.1.0
- * @date 2022-07-13
+ * @version 3.2.0
+ * @date 2022-07-28
  * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
@@ -16,9 +16,9 @@
 #include <algorithm>          // std::min, std::min_element, std::sort, std::unique
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
-#include <cmath>              // std::abs, std::llround, std::round, std::sqrt
+#include <cmath>              // std::abs, std::cos, std::exp, std::llround, std::log, std::round, std::sin, std::sqrt
 #include <condition_variable> // std::condition_variable
-#include <ctime>              // std::localtime, std::strftime, std::time_t
+#include <ctime>              // std::localtime, std::strftime, std::time, std::time_t
 #include <exception>          // std::exception
 #include <fstream>            // std::ofstream
 #include <future>             // std::future
@@ -26,8 +26,9 @@
 #include <ios>                // std::fixed
 #include <iostream>           // std::cout
 #include <limits>             // std::numeric_limits
+#include <memory>             // std::make_unique, std::unique_ptr
 #include <mutex>              // std::mutex, std::scoped_lock, std::unique_lock
-#include <random>             // std::mt19937_64, std::random_device, std::uniform_int_distribution, std::uniform_real_distribution
+#include <random>             // std::mt19937_64, std::random_device, std::uniform_int_distribution
 #include <stdexcept>          // std::runtime_error
 #include <string>             // std::string, std::to_string
 #include <thread>             // std::this_thread, std::thread
@@ -76,23 +77,23 @@ size_t tests_failed = 0;
  * @param items The items to print.
  */
 template <typename... T>
-void dual_print(const T&... items)
+void dual_print(T&&... items)
 {
-    sync_cout.print(items...);
+    sync_cout.print(std::forward<T>(items)...);
     if (output_log)
-        sync_file.print(items...);
+        sync_file.print(std::forward<T>(items)...);
 }
 
 /**
- * @brief Print any number of items into both std::cout and the log file, followed by a newline character, syncing both independently.
+ * @brief Print any number of items into both std::cout and the log file, syncing both independently. Also prints a newline character, and flushes the stream.
  *
  * @tparam T The types of the items.
  * @param items The items to print.
  */
 template <typename... T>
-void dual_println(const T&... items)
+void dual_println(T&&... items)
 {
-    dual_print(items..., '\n');
+    dual_print(std::forward<T>(items)..., BS::endl);
 }
 
 /**
@@ -169,19 +170,19 @@ void check(const T1 expected, const T2 obtained)
 /**
  * @brief Count the number of unique threads in the pool. Submits a number of tasks equal to twice the thread count into the pool. Each task stores the ID of the thread running it, and then waits until released by the main thread. This ensures that each thread in the pool runs at least one task. The number of unique thread IDs is then counted from the stored IDs.
  */
+std::condition_variable ID_cv, total_cv;
+std::mutex ID_mutex, total_mutex;
 BS::concurrency_t count_unique_threads()
 {
     const BS::concurrency_t num_tasks = pool.get_thread_count() * 2;
     std::vector<std::thread::id> thread_IDs(num_tasks);
-    std::mutex ID_mutex, total_mutex;
-    std::condition_variable ID_cv, total_cv;
     std::unique_lock<std::mutex> total_lock(total_mutex);
     BS::concurrency_t total_count = 0;
     bool ID_release = false;
     pool.wait_for_tasks();
     for (std::thread::id& id : thread_IDs)
         pool.push_task(
-            [&]
+            [&total_count, &id, &ID_release]
             {
                 id = std::this_thread::get_id();
                 {
@@ -190,15 +191,16 @@ BS::concurrency_t count_unique_threads()
                 }
                 total_cv.notify_one();
                 std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
-                ID_cv.wait(ID_lock_local, [&] { return ID_release; });
+                ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
             });
-    total_cv.wait_for(total_lock, std::chrono::milliseconds(500), [&] { return total_count == pool.get_thread_count(); });
+    total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
     {
         const std::scoped_lock ID_lock(ID_mutex);
         ID_release = true;
     }
     ID_cv.notify_all();
-    total_cv.wait_for(total_lock, std::chrono::milliseconds(500), [&] { return total_count == num_tasks; });
+    total_cv.wait(total_lock, [&total_count, &num_tasks] { return total_count == num_tasks; });
+    pool.wait_for_tasks();
     std::sort(thread_IDs.begin(), thread_IDs.end());
     return static_cast<BS::concurrency_t>(std::unique(thread_IDs.begin(), thread_IDs.end()) - thread_IDs.begin());
 }
@@ -291,38 +293,192 @@ void check_submit()
     dual_println("Checking that submit() works for a function with no arguments and a return value...");
     {
         bool flag = false;
-        std::future<int> my_future = pool.submit(
+        std::future<int> flag_future = pool.submit(
             [&flag]
             {
                 flag = true;
                 return 42;
             });
-        check(my_future.get() == 42 && flag);
+        check(flag_future.get() == 42 && flag);
     }
     dual_println("Checking that submit() works for a function with one argument and a return value...");
     {
         bool flag = false;
-        std::future<int> my_future = pool.submit(
+        std::future<int> flag_future = pool.submit(
             [](bool* flag_)
             {
                 *flag_ = true;
                 return 42;
             },
             &flag);
-        check(my_future.get() == 42 && flag);
+        check(flag_future.get() == 42 && flag);
     }
     dual_println("Checking that submit() works for a function with two arguments and a return value...");
     {
         bool flag1 = false;
         bool flag2 = false;
-        std::future<int> my_future = pool.submit(
+        std::future<int> flag_future = pool.submit(
             [](bool* flag1_, bool* flag2_)
             {
                 *flag1_ = *flag2_ = true;
                 return 42;
             },
             &flag1, &flag2);
-        check(my_future.get() == 42 && flag1 && flag2);
+        check(flag_future.get() == 42 && flag1 && flag2);
+    }
+}
+
+class flag_class
+{
+public:
+    void set_flag_no_args()
+    {
+        flag = true;
+    }
+
+    void set_flag_one_arg(const bool arg)
+    {
+        flag = arg;
+    }
+
+    int set_flag_no_args_return()
+    {
+        flag = true;
+        return 42;
+    }
+
+    int set_flag_one_arg_return(const bool arg)
+    {
+        flag = arg;
+        return 42;
+    }
+
+    bool get_flag() const
+    {
+        return flag;
+    }
+
+    void push_test_flag_no_args()
+    {
+        pool.push_task(&flag_class::set_flag_no_args, this);
+        pool.wait_for_tasks();
+        check(get_flag());
+    }
+
+    void push_test_flag_one_arg()
+    {
+        pool.push_task(&flag_class::set_flag_one_arg, this, true);
+        pool.wait_for_tasks();
+        check(get_flag());
+    }
+
+    void submit_test_flag_no_args()
+    {
+        pool.submit(&flag_class::set_flag_no_args, this).wait();
+        check(get_flag());
+    }
+
+    void submit_test_flag_one_arg()
+    {
+        pool.submit(&flag_class::set_flag_one_arg, this, true).wait();
+        check(get_flag());
+    }
+
+    void submit_test_flag_no_args_return()
+    {
+        std::future<int> flag_future = pool.submit(&flag_class::set_flag_no_args_return, this);
+        check(flag_future.get() == 42 && get_flag());
+    }
+
+    void submit_test_flag_one_arg_return()
+    {
+        std::future<int> flag_future = pool.submit(&flag_class::set_flag_one_arg_return, this, true);
+        check(flag_future.get() == 42 && get_flag());
+    }
+
+private:
+    bool flag = false;
+};
+
+/**
+ * @brief Check that submitting member functions works.
+ */
+void check_member_function()
+{
+    dual_println("Checking that push_task() works for a member function with no arguments or return value...");
+    {
+        flag_class flag;
+        pool.push_task(&flag_class::set_flag_no_args, &flag);
+        pool.wait_for_tasks();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that push_task() works for a member function with one argument and no return value...");
+    {
+        flag_class flag;
+        pool.push_task(&flag_class::set_flag_one_arg, &flag, true);
+        pool.wait_for_tasks();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that submit() works for a member function with no arguments or return value...");
+    {
+        flag_class flag;
+        pool.submit(&flag_class::set_flag_no_args, &flag).wait();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that submit() works for a member function with one argument and no return value...");
+    {
+        flag_class flag;
+        pool.submit(&flag_class::set_flag_one_arg, &flag, true).wait();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that submit() works for a member function with no arguments and a return value...");
+    {
+        flag_class flag;
+        std::future<int> flag_future = pool.submit(&flag_class::set_flag_no_args_return, &flag);
+        check(flag_future.get() == 42 && flag.get_flag());
+    }
+    dual_println("Checking that submit() works for a member function with one argument and a return value...");
+    {
+        flag_class flag;
+        std::future<int> flag_future = pool.submit(&flag_class::set_flag_one_arg_return, &flag, true);
+        check(flag_future.get() == 42 && flag.get_flag());
+    }
+}
+
+/**
+ * @brief Check that submitting member functions within an object works.
+ */
+void check_member_function_within_object()
+{
+    dual_println("Checking that push_task() works within an object for a member function with no arguments or return value...");
+    {
+        flag_class flag;
+        flag.push_test_flag_no_args();
+    }
+    dual_println("Checking that push_task() works within an object for a member function with one argument and no return value...");
+    {
+        flag_class flag;
+        flag.push_test_flag_one_arg();
+    }
+    dual_println("Checking that submit() works within an object for a member function with no arguments or return value...");
+    {
+        flag_class flag;
+        flag.submit_test_flag_no_args();
+    }
+    dual_println("Checking that submit() works within an object for a member function with one argument and no return value...");
+    {
+        flag_class flag;
+        flag.submit_test_flag_one_arg();
+    }
+    dual_println("Checking that submit() works within an object for a member function with no arguments and a return value...");
+    {
+        flag_class flag;
+        flag.submit_test_flag_no_args_return();
+    }
+    dual_println("Checking that submit() works within an object for a member function with one argument and a return value...");
+    {
+        flag_class flag;
+        flag.submit_test_flag_one_arg_return();
     }
 }
 
@@ -353,29 +509,42 @@ void check_wait_for_tasks()
 // ========================================
 
 /**
- * @brief Check that parallelize_loop() works for a specific number of indices split over a specific number of tasks, with no return value.
+ * @brief Check that push_loop() or parallelize_loop() work for a specific range of indices split over a specific number of tasks, with no return value.
  *
- * @param start The first index in the loop.
- * @param end The last index in the loop plus 1.
+ * @param random_start The first index in the loop.
+ * @param random_end The last index in the loop plus 1.
  * @param num_tasks The number of tasks.
+ * @param use_push Whether to check push_loop() instead of parallelize_loop().
  */
-void check_parallelize_loop_no_return(const int64_t random_start, int64_t random_end, const BS::concurrency_t num_tasks)
+template <typename T>
+void check_parallelize_loop_no_return(const int64_t random_start, T random_end, const BS::concurrency_t num_tasks, const bool use_push = false)
 {
     if (random_start == random_end)
         ++random_end;
-    dual_println("Verifying that a loop from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices...");
+    dual_println("Verifying that ", use_push ? "push_loop()" : "parallelize_loop()", " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices...");
     const size_t num_indices = static_cast<size_t>(std::abs(random_end - random_start));
-    const int64_t offset = std::min(random_start, random_end);
+    const int64_t offset = std::min(random_start, static_cast<int64_t>(random_end));
     std::unique_ptr<std::atomic<bool>[]> flags = std::make_unique<std::atomic<bool>[]>(num_indices);
-    pool.parallelize_loop(
-            random_start, random_end,
-            [&flags, offset](const int64_t start, const int64_t end)
-            {
-                for (int64_t i = start; i < end; ++i)
-                    flags[static_cast<size_t>(i - offset)] = true;
-            },
-            num_tasks)
-        .wait();
+    const auto loop = [&flags, offset](const int64_t start, const int64_t end)
+    {
+        for (int64_t i = start; i < end; ++i)
+            flags[static_cast<size_t>(i - offset)] = true;
+    };
+    if (use_push)
+    {
+        if (random_start == 0)
+            pool.push_loop(random_end, loop, num_tasks);
+        else
+            pool.push_loop(random_start, random_end, loop, num_tasks);
+        pool.wait_for_tasks();
+    }
+    else
+    {
+        if (random_start == 0)
+            pool.parallelize_loop(random_end, loop, num_tasks).wait();
+        else
+            pool.parallelize_loop(random_start, random_end, loop, num_tasks).wait();
+    }
     bool all_flags = true;
     for (size_t i = 0; i < num_indices; ++i)
         all_flags = all_flags && flags[i];
@@ -383,28 +552,25 @@ void check_parallelize_loop_no_return(const int64_t random_start, int64_t random
 }
 
 /**
- * @brief Check that parallelize_loop() works for a specific number of indices split over a specific number of tasks, with a return value.
+ * @brief Check that parallelize_loop() works for a specific range of indices split over a specific number of tasks, with a return value.
  *
- * @param start The first index in the loop.
- * @param end The last index in the loop plus 1.
+ * @param random_start The first index in the loop.
+ * @param random_end The last index in the loop plus 1.
  * @param num_tasks The number of tasks.
  */
 void check_parallelize_loop_return(const int64_t random_start, int64_t random_end, const BS::concurrency_t num_tasks)
 {
     if (random_start == random_end)
         ++random_end;
-    dual_println("Verifying that a loop from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " correctly sums all indices...");
-    const std::vector<int64_t> sums_vector = pool.parallelize_loop(
-                                                     random_start, random_end,
-                                                     [](const int64_t start, const int64_t end)
-                                                     {
-                                                         int64_t total = 0;
-                                                         for (int64_t i = start; i < end; ++i)
-                                                             total += i;
-                                                         return total;
-                                                     },
-                                                     num_tasks)
-                                                 .get();
+    dual_println("Verifying that parallelize_loop() from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " correctly sums all indices...");
+    const auto loop = [](const int64_t start, const int64_t end)
+    {
+        int64_t total = 0;
+        for (int64_t i = start; i < end; ++i)
+            total += i;
+        return total;
+    };
+    const std::vector<int64_t> sums_vector = (random_start == 0) ? pool.parallelize_loop(random_end, loop, num_tasks).get() : pool.parallelize_loop(random_start, random_end, loop, num_tasks).get();
     int64_t sum = 0;
     for (const int64_t& s : sums_vector)
         sum += s;
@@ -412,7 +578,7 @@ void check_parallelize_loop_return(const int64_t random_start, int64_t random_en
 }
 
 /**
- * @brief Check that parallelize_loop() works using several different random values for the range of indices and number of tasks.
+ * @brief Check that push_loop() and parallelize_loop() work using several different random values for the range of indices and number of tasks.
  */
 void check_parallelize_loop()
 {
@@ -421,9 +587,24 @@ void check_parallelize_loop()
     std::uniform_int_distribution<BS::concurrency_t> task_dist(1, pool.get_thread_count());
     constexpr uint64_t n = 10;
     for (uint64_t i = 0; i < n; ++i)
+        check_parallelize_loop_no_return(index_dist(mt), index_dist(mt), task_dist(mt), true);
+    for (uint64_t i = 0; i < n; ++i)
         check_parallelize_loop_no_return(index_dist(mt), index_dist(mt), task_dist(mt));
     for (uint64_t i = 0; i < n; ++i)
         check_parallelize_loop_return(index_dist(mt), index_dist(mt), task_dist(mt));
+    dual_println("Verifying that parallelize_loop() with identical start and end indices does nothing...");
+    bool flag = true;
+    const int64_t index = index_dist(mt);
+    pool.parallelize_loop(index, index, [&flag](const int64_t, const int64_t) { flag = false; }).wait();
+    check(flag);
+    dual_println("Trying parallelize_loop() with start and end indices of different types:");
+    const int64_t start = index_dist(mt);
+    const uint32_t end = static_cast<uint32_t>(std::abs(index_dist(mt)));
+    check_parallelize_loop_no_return(start, end, task_dist(mt));
+    dual_println("Trying the overloads for push_loop() and parallelize_loop() for the case where the first index is equal to 0:");
+    check_parallelize_loop_no_return(0, index_dist(mt), task_dist(mt), true);
+    check_parallelize_loop_no_return(0, index_dist(mt), task_dist(mt));
+    check_parallelize_loop_return(0, index_dist(mt), task_dist(mt));
 }
 
 // ===============================================
@@ -450,27 +631,32 @@ void check_task_monitoring()
             });
     constexpr std::chrono::milliseconds sleep_time(300);
     std::this_thread::sleep_for(sleep_time);
+
     dual_println("After submission, should have: ", n * 3, " tasks total, ", n, " tasks running, ", n * 2, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 3 && pool.get_tasks_running() == n && pool.get_tasks_queued() == n * 2);
     for (BS::concurrency_t i = 0; i < n; ++i)
         release[i] = true;
     std::this_thread::sleep_for(sleep_time);
+
     dual_println("After releasing ", n, " tasks, should have: ", n * 2, " tasks total, ", n, " tasks running, ", n, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 2 && pool.get_tasks_running() == n && pool.get_tasks_queued() == n);
     for (BS::concurrency_t i = n; i < n * 2; ++i)
         release[i] = true;
     std::this_thread::sleep_for(sleep_time);
+
     dual_println("After releasing ", n, " more tasks, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
     for (BS::concurrency_t i = n * 2; i < n * 3; ++i)
         release[i] = true;
     std::this_thread::sleep_for(sleep_time);
+
     dual_println("After releasing the final ", n, " tasks, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
+
     dual_println("Resetting pool to ", std::thread::hardware_concurrency(), " threads.");
     pool.reset(std::thread::hardware_concurrency());
 }
@@ -493,35 +679,42 @@ void check_pausing()
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 dual_println("Task ", i, " done.");
             });
+
     dual_println("Immediately after submission, should have: ", n * 3, " tasks total, ", 0, " tasks running, ", n * 3, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 3 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n * 3);
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
     dual_println("300ms later, should still have: ", n * 3, " tasks total, ", 0, " tasks running, ", n * 3, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 3 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n * 3);
     dual_println("Unpausing pool.");
     pool.paused = false;
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
     dual_println("300ms later, should have: ", n * 2, " tasks total, ", n, " tasks running, ", n, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 2 && pool.get_tasks_running() == n && pool.get_tasks_queued() == n);
     dual_println("Pausing pool and using wait_for_tasks() to wait for the running tasks.");
     pool.paused = true;
     pool.wait_for_tasks();
+
     dual_println("After waiting, should have: ", n, " tasks total, ", 0, " tasks running, ", n, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
     dual_println("200ms later, should still have: ", n, " tasks total, ", 0, " tasks running, ", n, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n);
     dual_println("Unpausing pool and using wait_for_tasks() to wait for all tasks.");
     pool.paused = false;
     pool.wait_for_tasks();
+
     dual_println("After waiting, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
+
     dual_println("Resetting pool to ", std::thread::hardware_concurrency(), " threads.");
     pool.reset(std::thread::hardware_concurrency());
 }
@@ -531,20 +724,37 @@ void check_pausing()
 // ======================================
 
 /**
- * @brief Check that exception handling work.
+ * @brief Check that exception handling works.
  */
 void check_exceptions()
 {
+    dual_println("Checking that exceptions are forwarded correctly by submit()...");
     bool caught = false;
-    std::future<void> my_future = pool.submit(
-        []
-        {
-            dual_println("Throwing exception...");
-            throw std::runtime_error("Exception thrown!");
-        });
+    auto throws = []
+    {
+        dual_println("Throwing exception...");
+        throw std::runtime_error("Exception thrown!");
+    };
+    std::future<void> my_future = pool.submit(throws);
     try
     {
         my_future.get();
+    }
+    catch (const std::exception& e)
+    {
+        if (e.what() == std::string("Exception thrown!"))
+            caught = true;
+    }
+    check(caught);
+
+    dual_println("Checking that exceptions are forwarded correctly by BS::multi_future...");
+    caught = false;
+    BS::multi_future<void> my_future2;
+    my_future2.f.push_back(pool.submit(throws));
+    my_future2.f.push_back(pool.submit(throws));
+    try
+    {
+        void(my_future2.get());
     }
     catch (const std::exception& e)
     {
@@ -626,10 +836,16 @@ void do_tests()
     print_header("Checking that submit() works:");
     check_submit();
 
+    print_header("Checking that submitting member functions works:");
+    check_member_function();
+
+    print_header("Checking that submitting member functions from within an object works:");
+    check_member_function_within_object();
+
     print_header("Checking that wait_for_tasks() works...");
     check_wait_for_tasks();
 
-    print_header("Checking that parallelize_loop() works:");
+    print_header("Checking that push_loop() and parallelize_loop() work:");
     check_parallelize_loop();
 
     print_header("Checking that task monitoring works:");
@@ -698,18 +914,19 @@ std::pair<double, double> analyze(const std::vector<std::chrono::milliseconds::r
 }
 
 /**
- * @brief Generate a seed. The std::mt19937_64 in each task will be seeded using this function in order to avoid depleting the entropy of the random_device.
+ * @brief A function to generate vector elements. Chosen arbitrarily to simulate a typical numerical calculation.
  *
- * @return A random unsigned 64-bit integer.
+ * @param i The vector number.
+ * @param j The element index.
+ * @return The value of the element.
  */
-uint64_t generate_seed()
+double generate_element(const size_t i, const size_t j)
 {
-    static std::mt19937_64 mt(rd());
-    return mt();
+    return std::log(std::sqrt(std::exp(std::sin(i) + std::cos(j))));
 }
 
 /**
- * @brief Benchmark multithreaded performance by generating random vectors.
+ * @brief Benchmark multithreaded performance.
  */
 void check_performance()
 {
@@ -718,10 +935,6 @@ void check_performance()
 
     // Set the formatting of floating point numbers.
     dual_print(std::fixed, std::setprecision(1));
-
-    // Initialize a random distribution to randomize vectors with arbitrary floating point values.
-    const double range = std::sqrt(std::numeric_limits<double>::max());
-    std::uniform_real_distribution<double> vector_dist(-range, range);
 
     // Initialize a timer object to measure execution time.
     BS::timer tmr;
@@ -733,42 +946,47 @@ void check_performance()
     // Define the number of tasks to try in each run of the test (0 = single-threaded).
     const BS::concurrency_t try_tasks[] = {0, thread_count / 4, thread_count / 2, thread_count, thread_count * 2, thread_count * 4};
 
-    // The size of the vectors to use for the test.
-    constexpr size_t vector_size = 500;
-
     // How many times to repeat each run of the test in order to collect reliable statistics.
     constexpr size_t repeat = 20;
     dual_println("Each test will be repeated ", repeat, " times to collect reliable statistics.");
 
-    // The target duration of the single-threaded test in milliseconds. The total time spent on the test in the single-threaded case will be approximately equal to repeat * target_ms.
-    constexpr std::chrono::milliseconds::rep target_ms = 300;
+    // The target execution time, in milliseconds, of the multi-threaded test with the number of blocks equal to the number of threads. The total time spent on that test will be approximately equal to repeat * target_ms.
+    constexpr std::chrono::milliseconds::rep target_ms = 50;
 
-    // Vectors to store statistics.
-    std::vector<double> different_n_timings;
-    std::vector<std::chrono::milliseconds::rep> same_n_timings;
-
-    // Test how many vectors we need to generate to roughly achieve the target duration.
-    size_t num_vectors = 1;
+    // Test how many vectors we need to generate, and of what size, to roughly achieve the target execution time.
+    dual_println("Determining the number and size of vectors to generate in order to achieve an approximate mean execution time of ", target_ms, " ms with ", thread_count, " tasks...");
+    size_t num_vectors = 64;
+    size_t vector_size = 64;
+    std::vector<std::vector<double>> vectors;
+    auto loop = [&vectors, &vector_size](const size_t start, const size_t end)
+    {
+        for (size_t i = start; i < end; ++i)
+        {
+            for (size_t j = 0; j < vector_size; ++j)
+                vectors[i][j] = generate_element(i, j);
+        }
+    };
     do
     {
         num_vectors *= 2;
-        std::vector<std::vector<double>> vectors(num_vectors, std::vector<double>(vector_size));
-        std::mt19937_64 test_mt(rd());
+        vector_size *= 2;
+        vectors = std::vector<std::vector<double>>(num_vectors, std::vector<double>(vector_size));
         tmr.start();
-        for (size_t i = 0; i < num_vectors; ++i)
-        {
-            for (size_t j = 0; j < vector_size; ++j)
-                vectors[i][j] = vector_dist(test_mt);
-        }
+        pool.push_loop(num_vectors, loop);
+        pool.wait_for_tasks();
         tmr.stop();
     } while (tmr.ms() < target_ms);
-    num_vectors = static_cast<size_t>(std::llround(static_cast<double>(num_vectors) * static_cast<double>(target_ms) / static_cast<double>(tmr.ms())));
+    num_vectors = thread_count * static_cast<size_t>(std::llround(static_cast<double>(num_vectors) * static_cast<double>(target_ms) / static_cast<double>(tmr.ms()) / thread_count));
 
     // Initialize the desired number of vectors.
-    std::vector<std::vector<double>> vectors(num_vectors, std::vector<double>(vector_size));
+    vectors = std::vector<std::vector<double>>(num_vectors, std::vector<double>(vector_size));
+
+    // Define vectors to store statistics.
+    std::vector<double> different_n_timings;
+    std::vector<std::chrono::milliseconds::rep> same_n_timings;
 
     // Perform the test.
-    dual_println("\nGenerating ", num_vectors, " random vectors with ", vector_size, " elements each:");
+    dual_println("Generating ", num_vectors, " vectors with ", vector_size, " elements each:");
     for (BS::concurrency_t n : try_tasks)
     {
         for (size_t r = 0; r < repeat; ++r)
@@ -776,27 +994,15 @@ void check_performance()
             tmr.start();
             if (n > 1)
             {
-                pool.parallelize_loop(
-                        0, num_vectors,
-                        [&vector_dist, &vectors](const size_t start, const size_t end)
-                        {
-                            std::mt19937_64 multi_mt(generate_seed());
-                            for (size_t i = start; i < end; ++i)
-                            {
-                                for (size_t j = 0; j < vector_size; ++j)
-                                    vectors[i][j] = vector_dist(multi_mt);
-                            }
-                        },
-                        n)
-                    .wait();
+                pool.push_loop(num_vectors, loop, n);
+                pool.wait_for_tasks();
             }
             else
             {
-                std::mt19937_64 single_mt(generate_seed());
                 for (size_t i = 0; i < num_vectors; ++i)
                 {
                     for (size_t j = 0; j < vector_size; ++j)
-                        vectors[i][j] = vector_dist(single_mt);
+                        vectors[i][j] = generate_element(i, j);
                 }
             }
             tmr.stop();
