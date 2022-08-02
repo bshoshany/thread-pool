@@ -24,6 +24,7 @@ jobs:
     name: ubuntu-${{matrix.compiler}}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         compiler: [g++, clang++]
     steps:
