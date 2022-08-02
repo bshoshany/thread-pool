@@ -1036,6 +1036,8 @@ int main()
     if (enable_tests)
         do_tests();
 
+    tests_failed++;
+
     if (tests_failed == 0)
     {
         if (enable_tests)
