@@ -18,19 +18,19 @@ jobs:
       run: cl BS_thread_pool_test.cpp /EHsc /O2 /DNDEBUG /std:c++17
 
     - name: run
-      run: BS_thread_pool_test.exe
+      run: ./BS_thread_pool_test.exe
 
   ubuntu:
     name: ubuntu-${{matrix.compiler}}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        compiler: [g++, clang]
+        compiler: [g++, clang++]
     steps:
     - uses: actions/checkout@v3
 
     - name: compile
-      run: ${{matrix.compiler}} -std=c++17 BS_thread_pool_test.cpp -o BS_thread_pool_test
+      run: ${{matrix.compiler}} -std=c++17 BS_thread_pool_test.cpp -o BS_thread_pool_test -lpthread
 
     - name: run
       run: ./BS_thread_pool_test
