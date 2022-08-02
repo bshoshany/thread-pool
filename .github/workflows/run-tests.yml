@@ -15,7 +15,7 @@ jobs:
 
     - uses: ilammy/msvc-dev-cmd@v1.10.0
     - name: compile
-        run: cl BS_thread_pool_test.cpp /EHsc /O2 /DNDEBUG /std:c++17
+      run: cl BS_thread_pool_test.cpp /EHsc /O2 /DNDEBUG /std:c++17
 
     - name: run
       run: BS_thread_pool_test.exe
