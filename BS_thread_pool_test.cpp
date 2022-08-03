@@ -1,8 +1,8 @@
 /**
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.2.0
- * @date 2022-07-28
+ * @version 3.3.0
+ * @date 2022-08-03
  * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
@@ -93,7 +93,7 @@ void dual_print(T&&... items)
 template <typename... T>
 void dual_println(T&&... items)
 {
-    dual_print(std::forward<T>(items)..., BS::endl);
+    dual_print(std::forward<T>(items)..., BS::synced_stream::endl);
 }
 
 /**
@@ -120,7 +120,7 @@ std::string get_time()
     const std::time_t t = std::time(nullptr);
     char time_string[32];
     std::strftime(time_string, sizeof(time_string), "%Y-%m-%d_%H.%M.%S", std::localtime(&t));
-    return std::string(time_string);
+    return time_string;
 }
 
 /**
@@ -669,8 +669,12 @@ void check_pausing()
     BS::concurrency_t n = std::min<BS::concurrency_t>(std::thread::hardware_concurrency(), 4);
     dual_println("Resetting pool to ", n, " threads.");
     pool.reset(n);
+    dual_println("Checking that the pool correctly reports that it is not paused.");
+    check(pool.is_paused() == false);
     dual_println("Pausing pool.");
-    pool.paused = true;
+    pool.pause();
+    dual_println("Checking that the pool correctly reports that it is paused.");
+    check(pool.is_paused() == true);
     dual_println("Submitting ", n * 3, " tasks, each one waiting for 200ms.");
     for (BS::concurrency_t i = 0; i < n * 3; ++i)
         pool.push_task(
@@ -689,14 +693,16 @@ void check_pausing()
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 3 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n * 3);
     dual_println("Unpausing pool.");
-    pool.paused = false;
+    pool.unpause();
+    dual_println("Checking that the pool correctly reports that it is not paused.");
+    check(pool.is_paused() == false);
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
     dual_println("300ms later, should have: ", n * 2, " tasks total, ", n, " tasks running, ", n, " tasks queued...");
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n * 2 && pool.get_tasks_running() == n && pool.get_tasks_queued() == n);
     dual_println("Pausing pool and using wait_for_tasks() to wait for the running tasks.");
-    pool.paused = true;
+    pool.pause();
     pool.wait_for_tasks();
 
     dual_println("After waiting, should have: ", n, " tasks total, ", 0, " tasks running, ", n, " tasks queued...");
@@ -708,7 +714,7 @@ void check_pausing()
     dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == n && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == n);
     dual_println("Unpausing pool and using wait_for_tasks() to wait for all tasks.");
-    pool.paused = false;
+    pool.unpause();
     pool.wait_for_tasks();
 
     dual_println("After waiting, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
@@ -750,8 +756,8 @@ void check_exceptions()
     dual_println("Checking that exceptions are forwarded correctly by BS::multi_future...");
     caught = false;
     BS::multi_future<void> my_future2;
-    my_future2.f.push_back(pool.submit(throws));
-    my_future2.f.push_back(pool.submit(throws));
+    my_future2.push_back(pool.submit(throws));
+    my_future2.push_back(pool.submit(throws));
     try
     {
         void(my_future2.get());
@@ -910,7 +916,7 @@ std::pair<double, double> analyze(const std::vector<std::chrono::milliseconds::r
     for (size_t i = 0; i < timings.size(); ++i)
         variance += (static_cast<double>(timings[i]) - mean) * (static_cast<double>(timings[i]) - mean) / static_cast<double>(timings.size());
     const double sd = std::sqrt(variance);
-    return std::pair(mean, sd);
+    return {mean, sd};
 }
 
 /**

@@ -15,7 +15,7 @@ Email: [baraksh@gmail.com](mailto:baraksh@gmail.com)<br />
 Website: [https://baraksh.com/](https://baraksh.com/)<br />
 GitHub: [https://github.com/bshoshany](https://github.com/bshoshany)<br />
 
-This is the complete documentation for v3.2.0 of the library, released on 2022-07-28.
+This is the complete documentation for v3.3.0 of the library, released on 2022-08-03.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
@@ -37,8 +37,8 @@ This is the complete documentation for v3.2.0 of the library, released on 2022-0
     * [Loops with return values](#loops-with-return-values)
     * [Parallelizing loops without futures](#parallelizing-loops-without-futures)
 * [Helper classes](#helper-classes)
-    * [Handling multiple futures at once](#handling-multiple-futures-at-once)
     * [Synchronizing printing to an output stream](#synchronizing-printing-to-an-output-stream)
+    * [Handling multiple futures at once](#handling-multiple-futures-at-once)
     * [Measuring execution time](#measuring-execution-time)
 * [Other features](#other-features)
     * [Monitoring the tasks](#monitoring-the-tasks)
@@ -47,6 +47,7 @@ This is the complete documentation for v3.2.0 of the library, released on 2022-0
 * [Testing the package](#testing-the-package)
     * [Automated tests](#automated-tests)
     * [Performance tests](#performance-tests)
+* [The light version of the package](#the-light-version-of-the-package)
 * [About the project](#about-the-project)
     * [Issue and pull request policy](#issue-and-pull-request-policy)
     * [Acknowledgements](#acknowledgements)
@@ -78,11 +79,12 @@ Other, more advanced multithreading libraries may offer more features and/or hig
     * Reusing threads avoids the overhead of creating and destroying them for individual tasks.
     * A task queue ensures that there are never more threads running in parallel than allowed by the hardware.
 * **Lightweight:**
-    * Only ~190 lines of code, excluding comments, blank lines, and the optional helper classes.
     * Single header file: simply `#include "BS_thread_pool.hpp"` and you're all set!
     * Header-only: no need to install or build the library.
     * Self-contained: no external requirements or dependencies.
     * Portable: uses only the C++ standard library, and works with any C++17-compliant compiler.
+    * Only ~340 lines of code, excluding comments and blank lines.
+    * A stand-alone "light version" of the thread pool is also available in the `BS_thread_pool_light.hpp` header file, with only ~170 lines of code.
 * **Easy to use:**
     * Very simple operation, using a handful of member functions.
     * Every task submitted to the queue using the `submit()` member function automatically generates an `std::future`, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
@@ -97,7 +99,7 @@ Other, more advanced multithreading libraries may offer more features and/or hig
     * Easily wait for all tasks in the queue to complete using the `wait_for_tasks()` member function.
     * Change the number of threads in the pool safely and on-the-fly as needed using the `reset()` member function.
     * Monitor the number of queued and/or running tasks using the `get_tasks_queued()`, `get_tasks_running()`, and `get_tasks_total()` member functions.
-    * Freely pause and resume the pool by modifying the `paused` member variable. When paused, threads do not retrieve new tasks out of the queue.
+    * Freely pause and resume the pool using the `pause()`, `unpause()`, and `is_paused()` member functions. When paused, threads do not retrieve new tasks out of the queue.
     * Catch exceptions thrown by the submitted tasks.
     * Submit class member functions to the pool, either applied to a specific object or from within the object itself.
     * Under continuous and active development. Bug reports and feature requests are welcome, and should be made via [GitHub issues](https://github.com/bshoshany/thread-pool/issues).
@@ -627,47 +629,6 @@ As with `parallelize_loop()`, the first argument can be omitted if the start ind
 
 ## Helper classes
 
-### Handling multiple futures at once
-
-The helper class template `BS::multi_future<T>`, already introduced in the context of `parallelize_loop()`, provides a convenient way to collect and access groups of futures. The futures are stored in a public member variable `f` of type `std::vector<std::future<T>>`, so all standard `std::vector` operations are available for organizing the futures. Once the futures are stored, you can use `wait()` to wait for all of them at once or `get()` to get an `std::vector<T>` with the results from all of them. Here's a simple example:
-
-```cpp
-#include "BS_thread_pool.hpp"
-
-int square(const int i)
-{
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    return i * i;
-};
-
-int main()
-{
-    BS::thread_pool pool;
-    BS::multi_future<int> mf1;
-    BS::multi_future<int> mf2;
-    for (int i = 0; i < 100; ++i)
-        mf1.f.push_back(pool.submit(square, i));
-    for (int i = 100; i < 200; ++i)
-        mf2.f.push_back(pool.submit(square, i));
-    /// ...
-    /// Do some stuff while the first group of tasks executes...
-    /// ...
-    const std::vector<int> squares1 = mf1.get();
-    std::cout << "Results from the first group:" << '\n';
-    for (const int s : squares1)
-        std::cout << s << ' ';
-    /// ...
-    /// Do other stuff while the second group of tasks executes...
-    /// ...
-    const std::vector<int> squares2 = mf2.get();
-    std::cout << '\n' << "Results from the second group:" << '\n';
-    for (const int s : squares2)
-        std::cout << s << ' ';
-}
-```
-
-In this example, we simulate complicated tasks by having each task wait for 500ms before returning its result. We collect the futures of the tasks submitted within each loop into two separate `BS::multi_future<int>` objects. `mf1` holds the results from the first loop, and `mf2` holds the results from the second loop. Now we can wait for and/or get the results from `mf1` whenever is convenient, and separately wait for and/or get the results from `mf2` at another time.
-
 ### Synchronizing printing to an output stream
 
 When printing to an output stream from multiple threads in parallel, the output may become garbled. For example, consider this code:
@@ -731,6 +692,94 @@ Task no. 5 executing.
 ```
 
 **Warning:** Always create the `BS::synced_stream` object **before** the `BS::thread_pool` object, as we did in this example. When the `BS::thread_pool` object goes out of scope, it waits for the remaining tasks to be executed. If the `BS::synced_stream` object goes out of scope before the `BS::thread_pool` object, then any tasks using the `BS::synced_stream` will crash. Since objects are destructed in the opposite order of construction, creating the `BS::synced_stream` object before the `BS::thread_pool` object ensures that the `BS::synced_stream` is always available to the tasks, even while the pool is destructing.
+
+Most stream manipulators defined in the headers `<ios>` and `<iomanip>`, such as `std::setw` (set the character width of the next output), `std::setprecision` (set the precision of floating point numbers), and `std::fixed` (display floating point numbers with a fixed number of digits), can be passed to `print()` and `println()` just as you would pass them to a stream.
+
+The only exceptions are the flushing manipulators `std::endl` and `std::flush`, which will not work because the compiler will not be able to figure out which template specializations to use. Instead, use `BS::synced_stream::endl` and `BS::synced_stream::flush`. Here is an example:
+
+```cpp
+#include "BS_thread_pool.hpp"
+#include <cmath>
+#include <iomanip>
+
+int main()
+{
+    BS::synced_stream sync_out;
+    BS::thread_pool pool;
+    sync_out.print(std::setprecision(10), std::fixed);
+    for (size_t i = 1; i <= 10; ++i)
+        pool.push_task([i, &sync_out] { sync_out.print("The square root of ", std::setw(2), i, " is ", std::sqrt(i), ".", BS::synced_stream::endl); });
+}
+```
+
+### Handling multiple futures at once
+
+The helper class template `BS::multi_future<T>`, already introduced in the context of `parallelize_loop()`, provides a convenient way to collect and access groups of futures. This class works similarly to STL containers such as `std::vector`:
+
+* When you create a new object, either use the default constructor to create an empty object and add futures to it later, or pass the desired number of futures to the constructor in advance.
+* Use the `[]` operator to access the future at a specific index, or the `push_back()` member function to append a new future to the list.
+* The `size()` member function tells you how many futures are currently stored in the object.
+* Once all the futures are stored, you can use `wait()` to wait for all of them at once or `get()` to get an `std::vector<T>` with the results from all of them.
+
+Aside from using `BS::multi_future` to track the execution of parallelized loops, it can also be used whenever you have several different groups of tasks and you want to track the execution of each group individually. Here's a simple example:
+
+```cpp
+#include "BS_thread_pool.hpp"
+#include <cmath>
+
+BS::synced_stream sync_out;
+BS::thread_pool pool;
+
+double power(const double i, const double j)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(10 * pool.get_thread_count()));
+    return std::pow(i, j);
+}
+
+void print_vector(const std::vector<double>& vec)
+{
+    for (const double i : vec)
+        sync_out.print(i, ' ');
+    sync_out.println();
+}
+
+int main()
+{
+    constexpr size_t n = 100;
+
+    // First group of tasks: calculate n squares.
+    // Here we create an empty BS::multi_future object, and append futures to it via push_back().
+    BS::multi_future<double> mf_squares;
+    for (int i = 0; i < n; ++i)
+        mf_squares.push_back(pool.submit(power, i, 2));
+
+    // Second group of tasks: calculate n cubes.
+    // In this case, we create a BS::multi_future object of the desired size in advance, and store the futures via the [] operator. This is faster since there will be no memory reallocations, but also more prone to errors.
+    BS::multi_future<double> mf_cubes(n);
+    for (int i = 0; i < n; ++i)
+        mf_cubes[i] = pool.submit(power, i, 3);
+
+    // Both groups are now queued, but it will take some time until they all execute.
+
+    /// ...
+    /// Do some stuff while the first group of tasks executes...
+    /// ...
+
+    // Get and print the results from the first group.
+    sync_out.println("Squares:");
+    print_vector(mf_squares.get());
+
+    /// ...
+    /// Do other stuff while the second group of tasks executes...
+    /// ...
+
+    // Get and print the results from the second group.
+    sync_out.println("Cubes:");
+    print_vector(mf_cubes.get());
+}
+```
+
+In this example, we simulate complicated tasks by having each task wait for a bit before returning its result. We collect the futures of the tasks submitted within each group into two separate `BS::multi_future<double>` objects. `mf_squares` holds the results from the first group, and `mf_cubes` holds the results from the second group. Now we can wait for and/or get the results from `mf_squares` whenever is convenient, and separately wait for and/or get the results from `mf_cubes` at another time.
 
 ### Measuring execution time
 
@@ -822,9 +871,9 @@ Task 11 done.
 
 ### Pausing the workers
 
-Sometimes you may wish to temporarily pause the execution of tasks, or perhaps you want to submit tasks to the queue in advance and only start executing them at a later time. You can do this using the public member variable `paused`.
+Sometimes you may wish to temporarily pause the execution of tasks, or perhaps you want to submit tasks to the queue in advance and only start executing them at a later time. You can do this using the member functions `pause()`, `unpause()`, and `is_paused()`.
 
-When `paused` is set to `true`, the workers will temporarily stop retrieving new tasks out of the queue. However, any tasks already executed will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume retrieving tasks, set `paused` back to its default value of `false`.
+When you call `pause()`, the workers will temporarily stop retrieving new tasks out of the queue. However, any tasks already executed will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume retrieving tasks, call `unpause()`. To check whether the pool is currently paused, call `is_paused()`.
 
 Here is an example:
 
@@ -840,14 +889,22 @@ void sleep_half_second(const size_t i)
     sync_out.println("Task ", i, " done.");
 }
 
+void check_if_paused()
+{
+    if (pool.is_paused())
+        sync_out.println("Pool paused.");
+    else
+        sync_out.println("Pool unpaused.");
+}
+
 int main()
 {
     for (size_t i = 0; i < 8; ++i)
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 8 tasks.");
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    pool.paused = true;
-    sync_out.println("Pool paused.");
+    pool.pause();
+    check_if_paused();
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     sync_out.println("Still paused...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -856,8 +913,8 @@ int main()
     sync_out.println("Submitted 4 more tasks.");
     sync_out.println("Still paused...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    pool.paused = false;
-    sync_out.println("Pool resumed.");
+    pool.unpause();
+    check_if_paused();
 }
 ```
 
@@ -873,7 +930,7 @@ Task 3 done.
 Still paused...
 Submitted 4 more tasks.
 Still paused...
-Pool resumed.
+Pool unpaused.
 Task 4 done.
 Task 5 done.
 Task 6 done.
@@ -884,7 +941,7 @@ Task 10 done.
 Task 11 done.
 ```
 
-Here is what happened. We initially submitted a total of 8 tasks to the queue. Since we waited for 250ms before pausing, the first 4 tasks have already started running, so they kept running until they finished. While the pool was paused, we submitted 4 more tasks to the queue, but they just waited at the end of the queue. When we resumed, the remaining 4 initial tasks were executed, followed by the 4 new tasks.
+Here is what happened. We initially submitted a total of 8 tasks to the queue. Since we waited for 250ms before pausing, the first 4 tasks have already started running, so they kept running until they finished. While the pool was paused, we submitted 4 more tasks to the queue, but they just waited at the end of the queue. When we unpaused, the remaining 4 initial tasks were executed, followed by the 4 new tasks.
 
 While the workers are paused, `wait_for_tasks()` will wait for the running tasks instead of all tasks (otherwise it would wait forever). This is demonstrated by the following program:
 
@@ -900,6 +957,14 @@ void sleep_half_second(const size_t i)
     sync_out.println("Task ", i, " done.");
 }
 
+void check_if_paused()
+{
+    if (pool.is_paused())
+        sync_out.println("Pool paused.");
+    else
+        sync_out.println("Pool unpaused.");
+}
+
 int main()
 {
     for (size_t i = 0; i < 8; ++i)
@@ -910,8 +975,9 @@ int main()
         pool.push_task(sleep_half_second, i);
     sync_out.println("Submitted 12 more tasks.");
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    pool.paused = true;
-    sync_out.println("Pool paused. Waiting for the ", pool.get_tasks_running(), " running tasks to complete.");
+    pool.pause();
+    check_if_paused();
+    sync_out.println("Waiting for the ", pool.get_tasks_running(), " running tasks to complete.");
     pool.wait_for_tasks();
     sync_out.println("All running tasks completed. ", pool.get_tasks_queued(), " tasks still queued.");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -919,9 +985,10 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     sync_out.println("Still paused...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    pool.paused = false;
+    pool.unpause();
+    check_if_paused();
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    sync_out.println("Pool resumed. Waiting for the remaining ", pool.get_tasks_total(), " tasks (", pool.get_tasks_running(), " running and ", pool.get_tasks_queued(), " queued) to complete.");
+    sync_out.println("Waiting for the remaining ", pool.get_tasks_total(), " tasks (", pool.get_tasks_running(), " running and ", pool.get_tasks_queued(), " queued) to complete.");
     pool.wait_for_tasks();
     sync_out.println("All tasks completed.");
 }
@@ -940,7 +1007,8 @@ Task 5 done.
 Task 6 done.
 Task 7 done.
 Submitted 12 more tasks.
-Pool paused. Waiting for the 4 running tasks to complete.
+Pool paused.
+Waiting for the 4 running tasks to complete.
 Task 8 done.
 Task 9 done.
 Task 10 done.
@@ -948,7 +1016,8 @@ Task 11 done.
 All running tasks completed. 8 tasks still queued.
 Still paused...
 Still paused...
-Pool resumed. Waiting for the remaining 8 tasks (4 running and 4 queued) to complete.
+Pool unpaused.
+Waiting for the remaining 8 tasks (4 running and 4 queued) to complete.
 Task 12 done.
 Task 13 done.
 Task 14 done.
@@ -960,7 +1029,7 @@ Task 19 done.
 All tasks completed.
 ```
 
-The first `wait_for_tasks()`, which was called with `paused == false`, waited for all 8 tasks, both running and queued. The second `wait_for_tasks()`, which was called with `paused == true`, only waited for the 4 running tasks, while the other 8 tasks remained queued, and were not executed since the pool was paused. Finally, the third `wait_for_tasks()`, which was called with `paused == false`, waited for the remaining 8 tasks, both running and queued.
+The first `wait_for_tasks()`, which was called while the pool was not paused, waited for all 8 tasks, both running and queued. The second `wait_for_tasks()`, which was called after pausing the pool, only waited for the 4 running tasks, while the other 8 tasks remained queued, and were not executed since the pool was paused. Finally, the third `wait_for_tasks()`, which was called after unpausing the pool, waited for the remaining 8 tasks, both running and queued.
 
 **Warning**: If the thread pool is destroyed while paused, any tasks still in the queue will never be executed!
 
@@ -1059,9 +1128,9 @@ BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library
 (c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
 GitHub: https://github.com/bshoshany/thread-pool
 
-Thread pool library version is v3.2.0 (2022-07-28).
+Thread pool library version is v3.3.0 (2022-08-03).
 Hardware concurrency is 24.
-Generating log file: BS_thread_pool_test-2022-07-28_15.29.31.log.
+Generating log file: BS_thread_pool_test-2022-08-03_12.32.04.log.
 
 Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!
 
@@ -1152,78 +1221,78 @@ Waiting for tasks...
 ======================================================
 Checking that push_loop() and parallelize_loop() work:
 ======================================================
-Verifying that push_loop() from 390892 to 541943 with 20 tasks modifies all indices...
+Verifying that push_loop() from 917499 to 884861 with 19 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -233617 to 52646 with 22 tasks modifies all indices...
+Verifying that push_loop() from 235488 to 296304 with 11 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 409845 to 410887 with 23 tasks modifies all indices...
+Verifying that push_loop() from -790296 to -152228 with 21 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 977764 to 726111 with 12 tasks modifies all indices...
+Verifying that push_loop() from -937055 to -135942 with 10 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -940107 to -882673 with 18 tasks modifies all indices...
+Verifying that push_loop() from 372276 to 486867 with 3 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -613072 to 675872 with 10 tasks modifies all indices...
+Verifying that push_loop() from 890415 to -163491 with 5 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 998082 to -267173 with 3 tasks modifies all indices...
+Verifying that push_loop() from 637645 to -894687 with 7 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -779960 to 518984 with 4 tasks modifies all indices...
+Verifying that push_loop() from 308032 to -254915 with 20 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -52424 to 2576 with 3 tasks modifies all indices...
+Verifying that push_loop() from 499518 to 104936 with 17 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 131005 to -557044 with 10 tasks modifies all indices...
+Verifying that push_loop() from 19080 to -378567 with 5 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -119788 to -727738 with 14 tasks modifies all indices...
+Verifying that parallelize_loop() from -298981 to -724834 with 11 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -911425 to -923429 with 8 tasks modifies all indices...
+Verifying that parallelize_loop() from 232695 to 767243 with 3 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 49601 to -772605 with 16 tasks modifies all indices...
+Verifying that parallelize_loop() from 177768 to 966097 with 10 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -322809 to -66366 with 15 tasks modifies all indices...
+Verifying that parallelize_loop() from 474617 to -155690 with 15 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 880099 to -150434 with 22 tasks modifies all indices...
+Verifying that parallelize_loop() from -733576 to 547977 with 9 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 984341 to 69159 with 11 tasks modifies all indices...
+Verifying that parallelize_loop() from -723922 to 992233 with 1 task modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -207913 to 829987 with 9 tasks modifies all indices...
+Verifying that parallelize_loop() from 957397 to 364478 with 5 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 297749 to -332031 with 2 tasks modifies all indices...
+Verifying that parallelize_loop() from 776948 to 895847 with 3 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 517539 to 811728 with 8 tasks modifies all indices...
+Verifying that parallelize_loop() from 696779 to 400637 with 17 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 311585 to -81170 with 21 tasks modifies all indices...
+Verifying that parallelize_loop() from -5265 to 746418 with 23 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 670932 to 740527 with 3 tasks correctly sums all indices...
-Expected: 98230419510, obtained: 98230419510 -> PASSED!
-Verifying that parallelize_loop() from 645122 to -546036 with 11 tasks correctly sums all indices...
-Expected: 118025890430, obtained: 118025890430 -> PASSED!
-Verifying that parallelize_loop() from 251002 to -903037 with 6 tasks correctly sums all indices...
-Expected: -752474973404, obtained: -752474973404 -> PASSED!
-Verifying that parallelize_loop() from -222340 to -791805 with 15 tasks correctly sums all indices...
-Expected: -577520651890, obtained: -577520651890 -> PASSED!
-Verifying that parallelize_loop() from 937604 to 819765 with 3 tasks correctly sums all indices...
-Expected: 207086487752, obtained: 207086487752 -> PASSED!
-Verifying that parallelize_loop() from -53900 to -339294 with 24 tasks correctly sums all indices...
-Expected: -112215493830, obtained: -112215493830 -> PASSED!
-Verifying that parallelize_loop() from 65429 to 903556 with 22 tasks correctly sums all indices...
-Expected: 812131652968, obtained: 812131652968 -> PASSED!
-Verifying that parallelize_loop() from 519293 to -332413 with 19 tasks correctly sums all indices...
-Expected: 159165965574, obtained: 159165965574 -> PASSED!
-Verifying that parallelize_loop() from 165831 to 47482 with 18 tasks correctly sums all indices...
-Expected: 25245261888, obtained: 25245261888 -> PASSED!
-Verifying that parallelize_loop() from -534648 to 475350 with 13 tasks correctly sums all indices...
-Expected: -59891871402, obtained: -59891871402 -> PASSED!
+Verifying that parallelize_loop() from -229724 to -883103 with 9 tasks correctly sums all indices...
+Expected: -727098445812, obtained: -727098445812 -> PASSED!
+Verifying that parallelize_loop() from 730130 to -370499 with 3 tasks correctly sums all indices...
+Expected: 395819207270, obtained: 395819207270 -> PASSED!
+Verifying that parallelize_loop() from -493633 to 957239 with 14 tasks correctly sums all indices...
+Expected: 672631513560, obtained: 672631513560 -> PASSED!
+Verifying that parallelize_loop() from -455240 to -60850 with 14 tasks correctly sums all indices...
+Expected: -203541129490, obtained: -203541129490 -> PASSED!
+Verifying that parallelize_loop() from -287333 to 298991 with 9 tasks correctly sums all indices...
+Expected: 6834778868, obtained: 6834778868 -> PASSED!
+Verifying that parallelize_loop() from 62326 to -392718 with 18 tasks correctly sums all indices...
+Expected: -150343352292, obtained: -150343352292 -> PASSED!
+Verifying that parallelize_loop() from 663186 to 380865 with 23 tasks correctly sums all indices...
+Expected: 294757240050, obtained: 294757240050 -> PASSED!
+Verifying that parallelize_loop() from 609125 to -43020 with 1 task correctly sums all indices...
+Expected: 369181893080, obtained: 369181893080 -> PASSED!
+Verifying that parallelize_loop() from 465469 to 112037 with 4 tasks correctly sums all indices...
+Expected: 204108747160, obtained: 204108747160 -> PASSED!
+Verifying that parallelize_loop() from 690574 to 113023 with 15 tasks correctly sums all indices...
+Expected: 464117673396, obtained: 464117673396 -> PASSED!
 Verifying that parallelize_loop() with identical start and end indices does nothing...
 -> PASSED!
 Trying parallelize_loop() with start and end indices of different types:
-Verifying that parallelize_loop() from -962605 to 21974 with 17 tasks modifies all indices...
+Verifying that parallelize_loop() from 894645 to 908567 with 9 tasks modifies all indices...
 -> PASSED!
 Trying the overloads for push_loop() and parallelize_loop() for the case where the first index is equal to 0:
-Verifying that push_loop() from 0 to 482251 with 7 tasks modifies all indices...
+Verifying that push_loop() from 0 to 949967 with 10 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 0 to 151431 with 1 task modifies all indices...
+Verifying that parallelize_loop() from 0 to 241018 with 3 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 0 to 806998 with 4 tasks correctly sums all indices...
-Expected: 651244965006, obtained: 651244965006 -> PASSED!
+Verifying that parallelize_loop() from 0 to 574984 with 19 tasks correctly sums all indices...
+Expected: 330606025272, obtained: 330606025272 -> PASSED!
 
 ====================================
 Checking that task monitoring works:
@@ -1232,21 +1301,21 @@ Resetting pool to 4 threads.
 Submitting 12 tasks.
 After submission, should have: 12 tasks total, 4 tasks running, 8 tasks queued...
 Result: 12 tasks total, 4 tasks running, 8 tasks queued -> PASSED!
-Task 1 released.
 Task 2 released.
-Task 3 released.
 Task 0 released.
+Task 1 released.
+Task 3 released.
 After releasing 4 tasks, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
 Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
-Task 5 released.
 Task 4 released.
 Task 7 released.
 Task 6 released.
+Task 5 released.
 After releasing 4 more tasks, should have: 4 tasks total, 4 tasks running, 0 tasks queued...
 Result: 4 tasks total, 4 tasks running, 0 tasks queued -> PASSED!
-Task 9 released.
 Task 11 released.
 Task 10 released.
+Task 9 released.
 Task 8 released.
 After releasing the final 4 tasks, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
 Result: 0 tasks total, 0 tasks running, 0 tasks queued -> PASSED!
@@ -1256,31 +1325,37 @@ Resetting pool to 24 threads.
 Checking that pausing works:
 ============================
 Resetting pool to 4 threads.
+Checking that the pool correctly reports that it is not paused.
+-> PASSED!
 Pausing pool.
+Checking that the pool correctly reports that it is paused.
+-> PASSED!
 Submitting 12 tasks, each one waiting for 200ms.
 Immediately after submission, should have: 12 tasks total, 0 tasks running, 12 tasks queued...
 Result: 12 tasks total, 0 tasks running, 12 tasks queued -> PASSED!
 300ms later, should still have: 12 tasks total, 0 tasks running, 12 tasks queued...
 Result: 12 tasks total, 0 tasks running, 12 tasks queued -> PASSED!
 Unpausing pool.
-Task 3 done.
+Checking that the pool correctly reports that it is not paused.
+-> PASSED!
 Task 1 done.
 Task 2 done.
 Task 0 done.
+Task 3 done.
 300ms later, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
 Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
 Pausing pool and using wait_for_tasks() to wait for the running tasks.
-Task 4 done.
-Task 6 done.
 Task 7 done.
 Task 5 done.
+Task 6 done.
+Task 4 done.
 After waiting, should have: 4 tasks total, 0 tasks running, 4 tasks queued...
 Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 200ms later, should still have: 4 tasks total, 0 tasks running, 4 tasks queued...
 Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 Unpausing pool and using wait_for_tasks() to wait for all tasks.
-Task 9 done.
 Task 8 done.
+Task 9 done.
 Task 10 done.
 Task 11 done.
 After waiting, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
@@ -1301,29 +1376,29 @@ Throwing exception...
 ============================================================
 Testing that vector operations produce the expected results:
 ============================================================
-Adding two vectors with 767202 elements using 4 tasks...
+Adding two vectors with 77579 elements using 9 tasks...
 -> PASSED!
-Adding two vectors with 3575 elements using 3 tasks...
+Adding two vectors with 925926 elements using 2 tasks...
 -> PASSED!
-Adding two vectors with 392555 elements using 11 tasks...
+Adding two vectors with 367682 elements using 22 tasks...
 -> PASSED!
-Adding two vectors with 754640 elements using 16 tasks...
+Adding two vectors with 28482 elements using 2 tasks...
 -> PASSED!
-Adding two vectors with 516335 elements using 9 tasks...
+Adding two vectors with 486607 elements using 19 tasks...
 -> PASSED!
-Adding two vectors with 564723 elements using 17 tasks...
+Adding two vectors with 688249 elements using 10 tasks...
 -> PASSED!
-Adding two vectors with 558475 elements using 15 tasks...
+Adding two vectors with 473738 elements using 18 tasks...
 -> PASSED!
-Adding two vectors with 447497 elements using 21 tasks...
+Adding two vectors with 743021 elements using 12 tasks...
 -> PASSED!
-Adding two vectors with 121486 elements using 19 tasks...
+Adding two vectors with 209804 elements using 11 tasks...
 -> PASSED!
-Adding two vectors with 324254 elements using 24 tasks...
+Adding two vectors with 635671 elements using 23 tasks...
 -> PASSED!
 
 ++++++++++++++++++++++++++++++
-SUCCESS: Passed all 85 checks!
+SUCCESS: Passed all 88 checks!
 ++++++++++++++++++++++++++++++
 ```
 
@@ -1359,6 +1434,22 @@ Thread pool performance test completed!
 ```
 
 This CPU has 12 physical cores, with each core providing two separate logical cores via hyperthreading, for a total of 24 threads. Without hyperthreading, we would expect a maximum theoretical speedup of 12x. With hyperthreading, one might naively expect to achieve up to a 24x speedup, but this is in fact impossible, as both logical cores share the same physical core's resources. However, generally we would expect [an estimated 30% additional speedup](https://software.intel.com/content/www/us/en/develop/articles/how-to-determine-the-effectiveness-of-hyper-threading-technology-with-an-application.html) from hyperthreading, which amounts to around 15.6x in this case. In our performance test, we see a speedup of 18.7x, saturating and even surpassing this estimated theoretical upper bound.
+
+## The light version of the package
+
+This package started out as a very lightweight thread pool, but over time has expanded to include many additional features and helper classes. Therefore, I have decided to bundle a light version of the thread pool in a separate and stand-alone header file, `BS_thread_pool_light.hpp`, which is about half the size of the full package.
+
+This file does not contain any of the helper classes, only a new `BS::thread_pool_light` class, which is a minimal thread pool with only the 5 most basic member functions:
+
+* `get_thread_count()`
+* `push_loop()`
+* `push_task()`
+* `submit()`
+* `wait_for_tasks()`
+
+A separate test program `BS_thread_pool_light_test.cpp` tests only the features of the lightweight `BS::thread_pool_light` class. In the spirit of minimalism, it does not generate a log file and does not do any benchmarks.
+
+To be perfectly clear, each header file is 100% stand-alone. If you wish to use the full package, you only need `BS_thread_pool.hpp`, and if you wish to use the light version, you only need `BS_thread_pool_light.hpp`. Only a single header file needs to be included in your project.
 
 ## About the project
 
