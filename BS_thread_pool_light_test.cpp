@@ -194,14 +194,18 @@ void check_push_task()
     println("Checking that push_task() works for a function with no arguments or return value...");
     {
         bool flag = false;
-        pool.push_task([&flag] { flag = true; });
+        pool.push_task([&flag] {
+			flag = true;
+		});
         pool.wait_for_tasks();
         check(flag);
     }
     println("Checking that push_task() works for a function with one argument and no return value...");
     {
         bool flag = false;
-        pool.push_task([](bool* flag_) { *flag_ = true; }, &flag);
+        pool.push_task([](bool* flag_) {
+			*flag_ = true;
+		}, &flag);
         pool.wait_for_tasks();
         check(flag);
     }
@@ -209,7 +213,9 @@ void check_push_task()
     {
         bool flag1 = false;
         bool flag2 = false;
-        pool.push_task([](bool* flag1_, bool* flag2_) { *flag1_ = *flag2_ = true; }, &flag1, &flag2);
+        pool.push_task([](bool* flag1_, bool* flag2_) {
+			*flag1_ = *flag2_ = true;
+		}, &flag1, &flag2);
         pool.wait_for_tasks();
         check(flag1 && flag2);
     }
@@ -223,20 +229,26 @@ void check_submit()
     println("Checking that submit() works for a function with no arguments or return value...");
     {
         bool flag = false;
-        pool.submit([&flag] { flag = true; }).wait();
+        pool.submit([&flag] { 
+			flag = true; 
+		}).wait();
         check(flag);
     }
     println("Checking that submit() works for a function with one argument and no return value...");
     {
         bool flag = false;
-        pool.submit([](bool* flag_) { *flag_ = true; }, &flag).wait();
+        pool.submit([](bool* flag_) { 
+			*flag_ = true; 
+		}, &flag).wait();
         check(flag);
     }
     println("Checking that submit() works for a function with two arguments and no return value...");
     {
         bool flag1 = false;
         bool flag2 = false;
-        pool.submit([](bool* flag1_, bool* flag2_) { *flag1_ = *flag2_ = true; }, &flag1, &flag2).wait();
+        pool.submit([](bool* flag1_, bool* flag2_) { 
+			*flag1_ = *flag2_ = true; 
+		}, &flag1, &flag2).wait();
         check(flag1 && flag2);
     }
     println("Checking that submit() works for a function with no arguments and a return value...");
