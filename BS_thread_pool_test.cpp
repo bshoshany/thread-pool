@@ -214,6 +214,8 @@ void check_constructor()
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
+	dual_println("Checking that the tracked number of alive threads is equal to the setup thread count...");
+	check(pool.get_thread_count(), pool.get_alive_threads_count());
 }
 
 /**
