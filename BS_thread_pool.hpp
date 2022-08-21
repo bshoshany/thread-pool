@@ -513,9 +513,9 @@ public:
         waiting = false;
     }
 
-private:
+protected:
     // ========================
-    // Private member functions
+    // Protected member functions
     // ========================
 
     /**
@@ -526,7 +526,7 @@ private:
         running = true;
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
-            threads[i] = std::thread(&thread_pool::worker, this);
+            threads[i] = std::thread(&thread_pool::workerthread_main, this);
         }
     }
 
@@ -584,6 +584,16 @@ private:
                     task_done_cv.notify_one();
             }
         }
+    }
+
+    /**
+     * @brief The base wrapper for the thread worker. Can be overridden in derived classes if your application needs special preparations in your worker threads.
+     *
+     * This method is supposed to invoke the `worker()` method.
+     */
+    virtual void workerthread_main()
+    {
+        worker();
     }
 
     // ============
