@@ -428,8 +428,8 @@ public:
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             tasks.push(task_function);
+            ++tasks_total;
         }
-        ++tasks_total;
         task_available_cv.notify_one();
     }
 
@@ -602,6 +602,8 @@ private:
 
     /**
      * @brief A condition variable used to notify worker() that a new task has become available.
+     *
+     * The accompanying mutex is `tasks_mutex`.
      */
     std::condition_variable task_available_cv = {};
 
@@ -622,6 +624,11 @@ private:
 
     /**
      * @brief A mutex to synchronize access to the task queue by different threads.
+     *
+     * This mutex presides over these variables:
+     * - tasks                     : all r/w access of course
+     * - tasks_total               : write/change operations only
+     * - task_available_cv.wait()  : waiting for signal that tasks queue has been updated
      */
     mutable std::mutex tasks_mutex = {};
 
