@@ -508,8 +508,8 @@ public:
     void wait_for_tasks()
     {
         waiting = true;
-        std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-        task_done_cv.wait(tasks_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
+        std::unique_lock<std::mutex> tasks_done_lock(tasks_done_mutex);
+        task_done_cv.wait(tasks_done_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
         waiting = false;
     }
 
@@ -622,8 +622,18 @@ private:
 
     /**
      * @brief A mutex to synchronize access to the task queue by different threads.
+     *
+     * This mutex presides over these variables:
+     * - tasks                     : all r/w access of course
+     * - tasks_total               : write/change operations only
+     * - task_available_cv.wait()  : waiting for signal that tasks queue has been updated
      */
     mutable std::mutex tasks_mutex = {};
+
+    /**
+     * @brief A mutex to synchronize access to the `tasks_done_cv` condition.
+     */
+    mutable std::mutex tasks_done_mutex = {};
 
     /**
      * @brief The number of threads in the pool.
