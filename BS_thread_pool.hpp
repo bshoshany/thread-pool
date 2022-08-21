@@ -300,6 +300,16 @@ public:
     }
 
     /**
+     * @brief Get the total number of alive threads in the threadpool. This number SHOULD match `thread_count`: a lower value means one or more threadpool threads have terminated already, most probably due to catastrophic failure(s) in the tasks.
+     *
+     * @return The total number of threads.
+     */
+    [[nodiscard]] size_t get_alive_threads_count() const
+    {
+        return alive_threads_count;
+    }
+
+    /**
      * @brief Get the number of threads in the pool.
      *
      * @return The number of threads.
@@ -578,6 +588,9 @@ protected:
      */
     bool should_continue_waiting_for_tasks()
     {
+        if (get_alive_threads_count() == 0)
+            return false;
+
         if (running)
         {
             if (!paused)
@@ -716,7 +729,9 @@ protected:
      */
     virtual void workerthread_main()
     {
+        alive_threads_count++;
         worker();
+        alive_threads_count--;
     }
 
     // ============
@@ -796,6 +811,13 @@ protected:
      * @brief An atomic variable indicating that wait_for_tasks() is active and expects to be notified whenever a task is done.
      */
     std::atomic<bool> waiting = false;
+
+    /**
+     * @brief An atomic variable to keep track of the total number of activated threads - each is either waiting for a task or executing a task. That last count is tracked by `tasks_total`, by the way.
+     *
+     * The `alive_threads_count` number is equal to the `threads_count` number, unless catastrophic failures in one or more of the threadpool threads have caused their termination.
+     */
+    std::atomic<size_t> alive_threads_count = 0;
 };
 
 //                                     End class thread_pool                                     //
