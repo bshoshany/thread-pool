@@ -811,6 +811,166 @@ protected:
         }
     }
 
+// MSVC supports hardware SEH:
+#if defined(_MSC_VER)
+
+    struct _EXCEPTION_POINTERS __ex_info ={0};
+
+    int ex_filter(unsigned long code, struct _EXCEPTION_POINTERS *info)
+    {
+        if (info != NULL)
+        {
+            __ex_info = *info;
+        }
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+#endif
+
+// MSVC supports hardware SEH:
+#if defined(_MSC_VER)
+
+    /**
+     * @brief An outer wrapper for the worker function which catches uncaught SEH (hardware) exceptions and then makes the thread terminate in an orderly fashion.
+     *
+     * This method is supposed to invoke the `__worker()` method.
+     *
+     * @return `true` when a catastrophic failure was detected (and caused the thread to terminate). `false` for normal termination.
+     */
+    [[nodiscard]] bool __worker_SEH(std::string &worker_failure_message)
+    {
+        alive_threads_count++;
+
+        __try
+        {
+            __try
+            {
+                return __worker(worker_failure_message);
+            }
+            __finally
+            {
+                alive_threads_count--;
+
+                // append to exit message, if any
+                //
+                // see also the comments in the workerthread_main() method
+                size_t slen = worker_failure_message.length();
+                size_t scap = worker_failure_message.capacity() - slen;
+                if (scap >= 70)
+                {
+                    if (slen > 0)
+                    {
+                        worker_failure_message[slen++] = '\n';
+                        scap--;
+                    }
+                    snprintf(&worker_failure_message[slen], scap, "%s: thread::worker unwinding; termination is %s.", AbnormalTermination() ? "ERROR" : "INFO", AbnormalTermination() ? "ABNORMAL" : "normal");
+                }
+            }
+        }
+        __except (ex_filter(GetExceptionCode(), GetExceptionInformation()))
+        {
+            struct _EXCEPTION_POINTERS ex_info = __ex_info;
+            auto code = GetExceptionCode();
+#if 0
+            std::exception_ptr p = std::current_exception();
+#else
+            void *p = ex_info.ExceptionRecord->ExceptionAddress;
+#endif
+
+            // append to exit message, if any
+            //
+            // see also the comments in the workerthread_main() method
+            size_t slen = worker_failure_message.length();
+            size_t scap = worker_failure_message.capacity() - slen;
+            if (scap >= 150)
+            {
+                if (slen > 0)
+                {
+                    worker_failure_message[slen++] = '\n';
+                    scap--;
+                }
+
+#define select_and_report(x)																																						\
+case x:																																												\
+    snprintf(&worker_failure_message[slen], scap, "ERROR: thread::worker unwinding; termination code is %s, current_exception_ptr = 0x%p\n", #x, reinterpret_cast<void *>(p));
+
+                switch (code)
+                {
+                default:
+                    snprintf(&worker_failure_message[slen], scap, "ERROR: thread::worker unwinding; termination code is %s, current_exception_ptr = 0x%p\n", "**UNKNOWN**", reinterpret_cast<void *>(p));
+                    break;
+
+                select_and_report(STILL_ACTIVE)
+                    break;
+                select_and_report(EXCEPTION_ACCESS_VIOLATION)
+                    break;
+                select_and_report(EXCEPTION_DATATYPE_MISALIGNMENT)
+                    break;
+                select_and_report(EXCEPTION_BREAKPOINT)
+                    break;
+                select_and_report(EXCEPTION_SINGLE_STEP)
+                    break;
+                select_and_report(EXCEPTION_ARRAY_BOUNDS_EXCEEDED)
+                    break;
+                select_and_report(EXCEPTION_FLT_DENORMAL_OPERAND)
+                    break;
+                select_and_report(EXCEPTION_FLT_DIVIDE_BY_ZERO)
+                    break;
+                select_and_report(EXCEPTION_FLT_INEXACT_RESULT)
+                    break;
+                select_and_report(EXCEPTION_FLT_INVALID_OPERATION)
+                    break;
+                select_and_report(EXCEPTION_FLT_OVERFLOW)
+                    break;
+                select_and_report(EXCEPTION_FLT_STACK_CHECK)
+                    break;
+                select_and_report(EXCEPTION_FLT_UNDERFLOW)
+                    break;
+                select_and_report(EXCEPTION_INT_DIVIDE_BY_ZERO)
+                    break;
+                select_and_report(EXCEPTION_INT_OVERFLOW)
+                    break;
+                select_and_report(EXCEPTION_PRIV_INSTRUCTION)
+                    break;
+                select_and_report(EXCEPTION_IN_PAGE_ERROR)
+                    break;
+                select_and_report(EXCEPTION_ILLEGAL_INSTRUCTION)
+                    break;
+                select_and_report(EXCEPTION_NONCONTINUABLE_EXCEPTION)
+                    break;
+                select_and_report(EXCEPTION_STACK_OVERFLOW)
+                    break;
+                select_and_report(EXCEPTION_INVALID_DISPOSITION)
+                    break;
+                select_and_report(EXCEPTION_GUARD_PAGE)
+                    break;
+                select_and_report(EXCEPTION_INVALID_HANDLE)
+                    break;
+                select_and_report(EXCEPTION_POSSIBLE_DEADLOCK)
+                    break;
+                select_and_report(CONTROL_C_EXIT)
+                    break;
+                }
+                worker_failure_message[scap - 1] = 0;		// snprintf() doesn't guarantee a NUL at the end. **We do.**
+
+#if 0
+                if (p)
+                {
+                    std::rethrow_exception(p);
+                }
+#endif
+
+                // TODO:
+                // - RaiseException https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-raiseexception
+                // - SetThreadErrorMode https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-setthreaderrormode
+            }
+
+            return true;
+        }
+    }
+
+#else
+
     /**
      * @brief An outer wrapper for the worker function which catches uncaught SEH (hardware) exceptions and then makes the thread terminate in an orderly fashion.
      *
@@ -827,6 +987,8 @@ protected:
         alive_threads_count--;
         return rv;
     }
+
+#endif
 
     const size_t worker_failure_message_size = 2048;
 
