@@ -972,16 +972,25 @@ void check_performance()
                 vectors[i][j] = generate_element(i, j);
         }
     };
-    do
+	float extrapolate_factor;
+	float damped_extrapolate_factor = 2.0;
+	float previous_extrapolate_factor = 0.0;
+	float extrapolate_factor_delta;
+	do
     {
-        num_vectors *= 2;
-        vector_size *= 2;
+        num_vectors *= damped_extrapolate_factor;
+        vector_size *= damped_extrapolate_factor;
         vectors = std::vector<std::vector<double>>(num_vectors, std::vector<double>(vector_size));
         tmr.start();
         pool.push_loop(num_vectors, loop);
         pool.wait_for_tasks();
         tmr.stop();
-    } while (tmr.ms() < target_ms);
+		extrapolate_factor = (target_ms + 1.0) / (tmr.ms() + 1.0);                             // prevent div/0 and as a side effect cast both times to float before dividing for a better ratio number.
+		damped_extrapolate_factor = fminf(fmaxf(extrapolate_factor, 0.6), 2.0);                // damp the extrapol factor as we WILL observe wild timings and should not immediately react to those.
+		extrapolate_factor_delta = fabsf(extrapolate_factor - previous_extrapolate_factor);    // this measures the estimation "stabilizing", when this delta approaches zero. This takes care of the rough timing noise.
+		fprintf(stderr, "tmr.ms: %4d, target_ms: %d, factor: %f, damped: %f, delta: %f, vector_size: %zu\n", (int)tmr.ms(), (int)target_ms, extrapolate_factor, damped_extrapolate_factor, extrapolate_factor_delta, vector_size);
+		previous_extrapolate_factor = extrapolate_factor;
+	} while (/* measured time : time target outside +/- 10% margin */ lroundf(extrapolate_factor * 10) != 10 || /* growth delta > 12% */ extrapolate_factor_delta >= 0.12);
     num_vectors = thread_count * static_cast<size_t>(std::llround(static_cast<double>(num_vectors) * static_cast<double>(target_ms) / static_cast<double>(tmr.ms()) / thread_count));
 
     // Initialize the desired number of vectors.
