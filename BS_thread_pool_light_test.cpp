@@ -9,7 +9,7 @@
  */
 
 // Get rid of annoying MSVC warning.
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
@@ -32,6 +32,10 @@
 
 // Include the header file for the thread pool library.
 #include "BS_thread_pool_light.hpp"
+
+// fix for MSVC/WIN32:
+#undef min
+#undef max
 
 // ================
 // Global variables
