@@ -839,6 +839,8 @@ protected:
      */
     [[nodiscard]] bool __worker_SEH(std::string &worker_failure_message)
     {
+        ASSERT_AND_CONTINUE(worker_failure_message.capacity() >= 70 + 150 + 80);
+
         alive_threads_count++;
 
         __try
@@ -856,6 +858,7 @@ protected:
                 // see also the comments in the workerthread_main() method
                 size_t slen = worker_failure_message.length();
                 size_t scap = worker_failure_message.capacity() - slen;
+                ASSERT_AND_CONTINUE(scap >= 70);
                 if (scap >= 70)
                 {
                     if (slen > 0)
@@ -864,6 +867,7 @@ protected:
                         scap--;
                     }
                     snprintf(&worker_failure_message[slen], scap, "%s: thread::worker unwinding; termination is %s.", AbnormalTermination() ? "ERROR" : "INFO", AbnormalTermination() ? "ABNORMAL" : "normal");
+                    ASSERT(strlen(&worker_failure_message[slen]) < 70);
                 }
             }
         }
@@ -882,6 +886,7 @@ protected:
             // see also the comments in the workerthread_main() method
             size_t slen = worker_failure_message.length();
             size_t scap = worker_failure_message.capacity() - slen;
+            ASSERT_AND_CONTINUE(scap >= 150);
             if (scap >= 150)
             {
                 if (slen > 0)
@@ -952,6 +957,7 @@ case x:																																												\
                     break;
                 }
                 worker_failure_message[scap - 1] = 0;		// snprintf() doesn't guarantee a NUL at the end. **We do.**
+                ASSERT(strlen(&worker_failure_message[slen]) < 150);
 
 #if 0
                 if (p)
