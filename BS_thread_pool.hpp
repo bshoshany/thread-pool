@@ -251,7 +251,7 @@ public:
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
      */
-    thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
+    thread_pool(const int thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
         create_threads();
     }
@@ -450,7 +450,7 @@ public:
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
      */
-    void reset(const concurrency_t thread_count_ = 0)
+    void reset(const int thread_count_ = 0)
     {
         const bool was_paused = paused;
         paused = true;
@@ -661,19 +661,31 @@ protected:
     /**
      * @brief Determine how many threads the pool should have, based on the parameter passed to the constructor or reset().
      *
-     * @param thread_count_ The parameter passed to the constructor or reset(). If the parameter is a positive number, then the pool will be created with this number of threads. If the parameter is non-positive, or a parameter was not supplied (in which case it will have the default value of 0), then the pool will be created with the total number of hardware threads available, as obtained from std::thread::hardware_concurrency(). If the latter returns a non-positive number for some reason, then the pool will be created with just one thread.
+     * @param thread_count_ The parameter passed to the constructor or reset(). If the parameter is a positive number, then the pool will be created with this number of threads. If the parameter is zero, or a parameter was not supplied (in which case it will have the default value of 0), then the pool will be created with the total number of hardware threads available, as obtained from std::thread::hardware_concurrency(). If the parameter is negative, then the pool will be created with the total number of hardware threads available, as obtained from std::thread::hardware_concurrency(), reduced by the given parameter value. You may use this variant when you wish to set a threadpool that's occupying only a limited number of cores on a multicore processor.
+     *
+     * If the calculated count is a non-positive number for some reason, then 1 will be assumed (and consequently the pool will be created with just one thread).
+     *
      * @return The number of threads to use for constructing the pool.
      */
-    [[nodiscard]] concurrency_t determine_thread_count(const concurrency_t thread_count_)
+    [[nodiscard]] concurrency_t determine_thread_count(const int thread_count_)
     {
         if (thread_count_ > 0)
             return thread_count_;
         else
         {
-            if (std::thread::hardware_concurrency() > 0)
-                return std::thread::hardware_concurrency();
+            auto cpu_count = std::thread::hardware_concurrency();
+            if (cpu_count > 0)
+            {
+                // restrict the number of threads to MAX(1, #CPUs - ABS(thread_count_))
+                if (-thread_count_ >= cpu_count)
+                    return 1;
+                else
+                    return cpu_count + thread_count_;
+            }
             else
+            {
                 return 1;
+            }
         }
     }
 
