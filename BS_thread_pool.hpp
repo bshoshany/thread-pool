@@ -26,6 +26,8 @@
 #include <type_traits>        // std::common_type_t, std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v
 #include <utility>            // std::forward, std::move, std::swap
 #include <vector>             // std::vector
+#include <stdexcept>
+
 
 namespace BS
 {
@@ -723,15 +725,85 @@ protected:
     }
 
     /**
-     * @brief The base wrapper for the thread worker. Can be overridden in derived classes if your application needs special preparations in your worker threads.
+     * @brief A wrapper for the worker function which catches uncaught C++ exceptions and then makes the thread terminate in an orderly fashion.
      *
      * This method is supposed to invoke the `worker()` method.
+     *
+     * @return `true` when a catastrophic failure was detected (and caused the thread to terminate). `false` for normal termination.
+     */
+    [[nodiscard]] bool __worker(std::string &worker_failure_message)
+    {
+        try
+        {
+            worker();
+
+            return false;
+        }
+        catch (...)
+        {
+            // don't care that much no more. Still, try to log it.
+            std::exception_ptr p = std::current_exception();
+            try
+            {
+                if (p)
+                {
+                    std::rethrow_exception(p);
+                }
+            }
+            catch (const std::exception& e)
+            {
+                // see also the comments in the workerthread_main() method
+                size_t scap = worker_failure_message.capacity();
+                if (scap >= 80)
+                {
+                    snprintf(&worker_failure_message[0], scap, "thread::worker caught unhandled C++ exception: %s", e.what());
+                    worker_failure_message[scap - 1] = 0;		// snprintf() doesn't guarantee a NUL at the end. **We do.**
+                }
+            }
+            return true;
+        }
+    }
+
+    /**
+     * @brief An outer wrapper for the worker function which catches uncaught SEH (hardware) exceptions and then makes the thread terminate in an orderly fashion.
+     *
+     * This method is supposed to invoke the `__worker()` method.
+     *
+     * @return `true` when a catastrophic failure was detected (and caused the thread to terminate). `false` for normal termination.
+     */
+    [[nodiscard]] bool __worker_SEH(std::string &worker_failure_message)
+    {
+        alive_threads_count++;
+        bool rv = __worker(worker_failure_message);
+        alive_threads_count--;
+        return rv;
+    }
+
+    const size_t worker_failure_message_size = 2048;
+
+    /**
+     * @brief The base wrapper for the thread worker. Can be overridden in derived classes if your application needs special preparations in your worker threads.
+     *
+     * This method is supposed to invoke the `__worker_SEH()` method, which, together with the `__worker()` method, is expected to be able to process all normal thread terminations and catch all catchable catastrophic thread failures.
+     *
+     * Your derivative `workerthread_main()` can use the return value from `__worker_SEH()` to drive any last application-specific post-catastrophe thread termination actions.
      */
     virtual void workerthread_main()
     {
-        alive_threads_count++;
-        worker();
-        alive_threads_count--;
+        // You SHOULD reserve space for any caught thread fatality report. We SHOULD have this space already present beforehand as we cannot trust the system to do much of anything any more when we happen to encounter such a catastrophic situation.
+        //
+        // - https://stackoverflow.com/questions/6700480/how-to-create-a-stdstring-directly-from-a-char-array-without-copying#comments-6700534 :: "Yes, it is permitted in C++11. There's a lot of arcane wording around this, which pretty much boils down to it being illegal to modify the null terminator, and being illegal to modify anything through the data() or c_str() pointers, but valid through &str[0]. stackoverflow.com/a/14291203/5696" – John Calsbeek
+        std::string worker_failure_message;
+        worker_failure_message.reserve(worker_failure_message_size);
+        //ASSERT(worker_failure_message.capacity() >= worker_failure_message_size);
+
+        bool abnormal_exit = __worker_SEH(worker_failure_message);
+
+        //ASSERT(!abnormal_exit || !worker_failure_message.empty()); // message MUST be filled any time an abnormal termination has been observed.
+        if (!worker_failure_message.empty())
+        {
+            fprintf(stderr, "ERROR: %s\nWARNING: The thread will terminate/abort now!\n", worker_failure_message.c_str());
+        }
     }
 
     // ============
