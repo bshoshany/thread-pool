@@ -27,7 +27,31 @@
 #include <utility>            // std::forward, std::move, std::swap
 #include <vector>             // std::vector
 #include <stdexcept>
+#if defined(_MSC_VER)
+// see also https://docs.microsoft.com/en-us/cpp/cpp/try-except-statement?view=msvc-170 et al.
+#include <windows.h>
+#include <excpt.h>
+#pragma warning(push)
+#pragma warning(disable: 4005) // warning C4005: macro redefinition
+#include <ntstatus.h> // STATUS_POSSIBLE_DEADLOCK
+#pragma warning(pop)
+#endif
 
+#ifndef ASSERT
+#if defined(_WIN32)
+#define ASSERT(expr)			(void)((expr) || (DebugBreak(), 0))
+#else
+#define ASSERT(expr)
+#endif
+#endif
+
+#ifndef ASSERT_AND_CONTINUE
+#if defined(_WIN32)
+#define ASSERT_AND_CONTINUE(expr)			(void)((expr) || (DebugBreak(), 0))
+#else
+#define ASSERT_AND_CONTINUE(expr)
+#endif
+#endif
 
 namespace BS
 {
@@ -455,7 +479,7 @@ public:
         const bool was_paused = paused;
         paused = true;
         wait_for_tasks();
-        //ASSERT(!running || get_tasks_running() == 0);
+        ASSERT(!running || get_tasks_running() == 0);
         destroy_threads();
         thread_count = determine_thread_count(thread_count_);
         threads = std::make_unique<std::thread[]>(thread_count);
@@ -776,6 +800,7 @@ protected:
             {
                 // see also the comments in the workerthread_main() method
                 size_t scap = worker_failure_message.capacity();
+                ASSERT_AND_CONTINUE(scap >= 80);
                 if (scap >= 80)
                 {
                     snprintf(&worker_failure_message[0], scap, "thread::worker caught unhandled C++ exception: %s", e.what());
@@ -795,6 +820,8 @@ protected:
      */
     [[nodiscard]] bool __worker_SEH(std::string &worker_failure_message)
     {
+        ASSERT_AND_CONTINUE(worker_failure_message.capacity() >= 80);
+
         alive_threads_count++;
         bool rv = __worker(worker_failure_message);
         alive_threads_count--;
@@ -817,11 +844,11 @@ protected:
         // - https://stackoverflow.com/questions/6700480/how-to-create-a-stdstring-directly-from-a-char-array-without-copying#comments-6700534 :: "Yes, it is permitted in C++11. There's a lot of arcane wording around this, which pretty much boils down to it being illegal to modify the null terminator, and being illegal to modify anything through the data() or c_str() pointers, but valid through &str[0]. stackoverflow.com/a/14291203/5696" – John Calsbeek
         std::string worker_failure_message;
         worker_failure_message.reserve(worker_failure_message_size);
-        //ASSERT(worker_failure_message.capacity() >= worker_failure_message_size);
+        ASSERT(worker_failure_message.capacity() >= worker_failure_message_size);
 
         bool abnormal_exit = __worker_SEH(worker_failure_message);
 
-        //ASSERT(!abnormal_exit || !worker_failure_message.empty()); // message MUST be filled any time an abnormal termination has been observed.
+        ASSERT(!abnormal_exit || !worker_failure_message.empty()); // message MUST be filled any time an abnormal termination has been observed.
         if (!worker_failure_message.empty())
         {
             fprintf(stderr, "ERROR: %s\nWARNING: The thread will terminate/abort now!\n", worker_failure_message.c_str());
