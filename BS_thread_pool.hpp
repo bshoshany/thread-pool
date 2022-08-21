@@ -428,8 +428,8 @@ public:
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             tasks.push(task_function);
+            ++tasks_total;
         }
-        ++tasks_total;
         task_available_cv.notify_one();
     }
 
@@ -443,11 +443,13 @@ public:
         const bool was_paused = paused;
         paused = true;
         wait_for_tasks();
+        //ASSERT(!running || get_tasks_running() == 0);
         destroy_threads();
         thread_count = determine_thread_count(thread_count_);
         threads = std::make_unique<std::thread[]>(thread_count);
-        paused = was_paused;
         create_threads();
+        if (!was_paused)
+            unpause();
     }
 
     /**
@@ -500,6 +502,20 @@ public:
     void unpause()
     {
         paused = false;
+
+        // notify_all to make sure all threads look at the task queue once again as they may be stuck otherwise in this paused scenario:
+        //
+        // - all threads are busy working on the last tasks (no more pending tasks)
+        // - control thread sets pool mode to paused
+        // - control threads push more tasks onto the queue
+        //   (worker threads don't observe those notify_one() signals as they are still busy finishing the work from before)
+        // - worker threads finish and go into 'pause mode'.
+        //   (they now know there's new tasks pending, but it's 'pause mode', so they wait instead.)
+        // - control thread unpauses via this call.
+        // - no thread will react as they're all waiting for a fresh notify signal: they all started waiting after the last notify was sent, so nothing happens...
+        //
+        // ... unless we wake them all right now!
+        task_available_cv.notify_all();
     }
 
     /**
@@ -508,8 +524,45 @@ public:
     void wait_for_tasks()
     {
         waiting = true;
-        std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-        task_done_cv.wait(tasks_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
+        std::unique_lock<std::mutex> tasks_done_lock(tasks_done_mutex);
+
+        // https://en.cppreference.com/w/cpp/thread/condition_variable/wait_for
+        //
+        // why don't we simply use condition.wait()?
+        //
+        // Because we also may run this code during the application shutdown phase (either through regular shutdown or through a catastrophic failure which invoked exit() et al): when `running == false` the conditions as summarized in `should_continue_waiting_for_tasks()` have to be checked for proper termination, yet often are not triggered by any notification: at least on MSwindows threads can be terminated then without so much as a peep and the only way to observe their termination is via the .joinable() checks, as done in `should_continue_waiting_for_tasks()`. Since this is a non-notified check, we'll have to produce some sort of a polling loop here: that's where .wait_for() comes in.
+        //
+        // As we don't know who or when will set `running = false`, we can't just do this for when we are already shutting down ourselves, but must do so at all times, so we can timely observe `running == false` conditions happening.
+        for (;;)
+        {
+            bool should_stop_waiting = task_done_cv.wait_for(tasks_done_lock, sleep_duration, [this] {
+                return !should_continue_waiting_for_tasks();
+            });
+            tasks_done_lock.unlock();
+
+            if (should_stop_waiting)
+                break;
+
+            if (!running)
+            {
+                // just keep screaming...
+                // Without this, in practice it turns out sometimes a thread (or more) remains stuck for a while...
+                //
+                // See also:
+                // - https://en.cppreference.com/w/cpp/thread/condition_variable/notify_all
+                // - https://stackoverflow.com/questions/38184549/not-all-threads-notified-of-condition-variable-notify-all
+                // where one of the answers says: "Finally, cv.notify_all() only notified currently waiting threads. If a thread shows up later, no dice."
+                // which is corroborated by the docs above: "Unblocks all threads currently waiting for *this." and then later:
+                // "This makes it impossible for notify_one() to, for example, be delayed and unblock a thread that started waiting just after the call to notify_one() was made."
+                // Ditto for notify_all() on that one, of course.
+                task_available_cv.notify_all();
+            }
+
+            if (sleep_duration == std::chrono::milliseconds::zero())
+    			std::this_thread::yield();
+
+			tasks_done_lock.lock();
+        }
         waiting = false;
     }
 
@@ -517,6 +570,52 @@ private:
     // ========================
     // Private member functions
     // ========================
+
+    /**
+     * @brief Check whether we should wait for tasks to be completed. Normally, we would want to wait for all tasks, both those that are currently running in the threads and those that are still waiting in the queue. However, if the pool is paused, we ONLY want to wait for the currently running tasks (so that any task that was before the 'pause mode' was activated gets a chance to complete in an orderly fashion).
+     *
+     * Note: When we are shutting down, we wait for the threads to terminate. They will do this as fast as possible, we don't concern ourselves with the means how that is accomplished.
+     */
+    bool should_continue_waiting_for_tasks()
+    {
+        if (running)
+        {
+            if (!paused)
+            {
+                // when we're running normally, we want to wait until the entire task queue is depleted.
+                if (get_tasks_total() == 0)
+                    return false;
+            }
+            else
+            {
+                // when we're in 'paused' mode, we merely wish the tasks from before the mode transition and still being executed to finish. Any task that's still in the queue when 'pause mode' was enabled SHOULD remain in the queue until the 'pause mode' is lifted.
+                if (get_tasks_running() == 0)
+                    return false;
+            }
+        }
+        else
+        {
+            // don't check the task queue when we've already shut down the pool. Just terminate those threads as these numbers won't be changing anymore anyway.
+
+            bool go = true;
+            for (size_t i = 0; i < thread_count; i++)
+            {
+                // This is the real check that also detects when a thread has been swiftly terminated WITHOUT AN EXCEPTION OR ERROR when the application has invoked `exit()` to terminate the current run.
+                //
+                // https://stackoverflow.com/questions/33943601/check-if-stdthread-is-still-running
+                //
+                // While some say thread.joinable() is not dependable when used once, we don't mind as we'll be looping through here anyway until all threads check out as such: see wait_for_tasks().
+                //
+                // Which is also why we keep firing those `cv.notify_all()` notifications in wait_for_tasks(): together they guarantee the threads will be cleaned up properly, assuming none of them is stuck forever in a task() they just happen to be executing...
+                bool terminated = threads[i].joinable();
+                go &= terminated;
+            }
+            if (go)
+                return false;
+        }
+
+        return true;
+    }
 
     /**
      * @brief Create the threads in the pool and assign a worker to each thread.
@@ -537,6 +636,7 @@ private:
     {
         running = false;
         task_available_cv.notify_all();
+        wait_for_tasks();
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i].join();
@@ -563,7 +663,7 @@ private:
     }
 
     /**
-     * @brief A worker function to be assigned to each thread in the pool. Waits until it is notified by push_task() that a task is available, and then retrieves the task from the queue and executes it. Once the task finishes, the worker notifies wait_for_tasks() in case it is waiting.
+     * @brief A worker function to be assigned to each thread in the pool. Waits until it is notified by push_task() that a task is available, and then retrieves the task from the queue and executes it. Once the task finishes, the worker notifies any `wait_for_tasks()` in case it is waiting.
      */
     void worker()
     {
@@ -571,17 +671,40 @@ private:
         {
             std::function<void()> task;
             std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-            task_available_cv.wait(tasks_lock, [this] { return !tasks.empty() || !running; });
-            if (running && !paused)
+            task_available_cv.wait(tasks_lock, [this] {
+                // we need to stop waiting when we observe a shutdown is in progress:
+                if (!running)
+                    return true;
+                // otherwise, we only stop waiting when we're NOT in 'pause mode': the whole point of 'pause mode' is to stop the thread pool from doing any more work!
+                //
+                // don't run around in this loop like a crazed rodent on meth when it's 'pause mode': take a breather instead!
+                if (paused)
+                    return false;
+                // okay, we're running in normal mode when we get here: is there anything for us to do?
+                return !tasks.empty();
+            });
+
+            if (running)
             {
-                task = std::move(tasks.front());
-                tasks.pop();
-                tasks_lock.unlock();
-                task();
-                tasks_lock.lock();
-                --tasks_total;
-                if (waiting)
-                    task_done_cv.notify_one();
+                if (!paused)
+                {
+                    task = std::move(tasks.front());
+                    tasks.pop();
+                    tasks_lock.unlock();
+
+                    task();
+
+                    tasks_lock.lock();
+                    --tasks_total;
+                    // Note: technically, the check for `waiting` is not required. notify_all() will simply signal all *observing* wait_for_tasks() and continue without hesitation anyhow.
+                    if (waiting)
+                    {
+                        // We don't know whether zero, one or more control threads are waiting for us in their `wait_for_tasks()` calls, so we do not use .notify_one() but use .notify_all() instead: everybody should be made able to check whether their conditions about the task queue are finally met.
+                        //
+                        // This solves the issues when multiple controlling threads() call `wait_for_tasks()`.
+                        task_done_cv.notify_all();
+                    }
+                }
             }
         }
     }
@@ -601,12 +724,26 @@ private:
     std::atomic<bool> running = false;
 
     /**
+     * @brief The `wait_for_tasks()` poll cycle period, in milliseconds, where after each `sleep_duration` wait_for_tasks() will be incited to broadcast its waiting state to the worker threads so they wake from their potential short slumbers and check all shutdown / reactivation conditions and signal back when they've done so. Consequently, when there's no tasks pending or incoming, thread workers are not woken up, ever, unless `wait_for_tasks()` explicitly asks for them to wake up and check everything, including 'pause mode' and 'shutdown/cleanup' (running == 0).
+	 * If set to 0, then instead of sleeping for a bit when termination conditions have not yet been met, `wait_for_tasks()` will execute std::this_thread::yield(). The default value is 10 milliseconds.
+	 *
+	 * Note that the `sleep_duration` value is only relevant to execution timing of `wait_for_tasks()` when one of these conditions apply:
+	 * - the threadpool has been put into 'pause mode' and there are no more lingering tasks from the previous era being finished, while the queue stays in 'pause mode'.
+	 * - the threadpool is shutting down (running==false, due to threadpool instance cleanup & destruction, usually part of an application shutdown)
+     */
+    std::chrono::milliseconds sleep_duration = std::chrono::milliseconds(10);
+
+    /**
      * @brief A condition variable used to notify worker() that a new task has become available.
+     *
+     * The accompanying mutex is `tasks_mutex`.
      */
     std::condition_variable task_available_cv = {};
 
     /**
      * @brief A condition variable used to notify wait_for_tasks() that a tasks is done.
+     *
+     * The accompanying mutex is `task_done_mutex`.
      */
     std::condition_variable task_done_cv = {};
 
@@ -622,8 +759,18 @@ private:
 
     /**
      * @brief A mutex to synchronize access to the task queue by different threads.
+     *
+     * This mutex presides over these variables:
+     * - tasks                     : all r/w access of course
+     * - tasks_total               : write/change operations only
+     * - task_available_cv.wait()  : waiting for signal that tasks queue has been updated
      */
     mutable std::mutex tasks_mutex = {};
+
+    /**
+     * @brief A mutex to synchronize access to the `tasks_done_cv` condition.
+     */
+    mutable std::mutex tasks_done_mutex = {};
 
     /**
      * @brief The number of threads in the pool.
