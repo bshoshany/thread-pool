@@ -307,7 +307,7 @@ public:
     /**
      * @brief Set the priority of threads in the pool.
      */
-    void set_priority(int priority)
+    [[nodiscard]] void set_priority(int priority)
 	{
 	#ifdef _WIN32
         for (concurrency_t i = 0; i < thread_count; ++i)
@@ -330,7 +330,7 @@ public:
      *
      * @return The priority of threads in the pool.
      */
-    int get_priority()
+    [[nodiscard]] int get_priority()
 	{
         return thread_priority;
 	};
