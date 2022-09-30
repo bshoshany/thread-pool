@@ -26,6 +26,11 @@
 #include <type_traits>        // std::common_type_t, std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v
 #include <utility>            // std::forward, std::move, std::swap
 #include <vector>             // std::vector
+#ifdef _WIN32 || _WIN64
+#include <processthreadsapi.h>
+#else
+#include <pthread.h>
+#endif
 
 namespace BS
 {
@@ -298,6 +303,37 @@ public:
     {
         return tasks_total;
     }
+
+    /**
+     * @brief Set the priority of threads in the pool.
+     */
+    void set_priority(int priority)
+	{
+	#ifdef _WIN32 || _WIN64
+        for (concurrency_t i = 0; i < thread_count; ++i)
+        {
+            SetThreadPriority(threads[i].native_handle(), priority);
+        }
+	#else
+		sched_param sch;
+		sch.sched_priority = priority;
+        for (concurrency_t i = 0; i < thread_count; ++i)
+        {
+            pthread_setschedparam(threads[i].native_handle(), SCHED_FIFO, &sch);
+        }
+	#endif
+    thread_priority = priority;
+	};
+    
+    /**
+     * @brief Get the priority of threads in the pool.
+     *
+     * @return The priority of threads in the pool.
+     */
+    int get_priority()
+	{
+        return thread_priority;
+	};
 
     /**
      * @brief Get the number of threads in the pool.
@@ -629,6 +665,11 @@ private:
      * @brief The number of threads in the pool.
      */
     concurrency_t thread_count = 0;
+    
+     /**
+     * @brief The priority of threads in the pool.
+     */
+    int thread_priority = 0;
 
     /**
      * @brief A smart pointer to manage the memory allocated for the threads.
