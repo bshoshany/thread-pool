@@ -12,6 +12,11 @@
 
 #define BS_THREAD_POOL_VERSION "v3.3.0 (2022-08-03)"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
 #include <condition_variable> // std::condition_variable
@@ -26,11 +31,6 @@
 #include <type_traits>        // std::common_type_t, std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v
 #include <utility>            // std::forward, std::move, std::swap
 #include <vector>             // std::vector
-#ifdef _WIN32 || _WIN64
-#include <processthreadsapi.h>
-#else
-#include <pthread.h>
-#endif
 
 namespace BS
 {
@@ -309,7 +309,7 @@ public:
      */
     void set_priority(int priority)
 	{
-	#ifdef _WIN32 || _WIN64
+	#ifdef _WIN32
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             SetThreadPriority(threads[i].native_handle(), priority);
