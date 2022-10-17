@@ -429,6 +429,8 @@ public:
             const std::scoped_lock tasks_lock(tasks_mutex);
             tasks.push(task_function);
         }
+        
+        const std::lock_guard tasks_lock(tasks_mutex);
         ++tasks_total;
         task_available_cv.notify_one();
     }
@@ -535,8 +537,11 @@ private:
      */
     void destroy_threads()
     {
-        running = false;
-        task_available_cv.notify_all();
+        {
+            const std::lock_guard tasks_locker(tasks_mutex);
+            running = false;
+            task_available_cv.notify_all();
+        }
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i].join();
