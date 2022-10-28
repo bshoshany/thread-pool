@@ -513,6 +513,20 @@ public:
         waiting = false;
     }
 
+    /**
+     * @brief Inside a task, retrieve the index of the current thread within the pool. If called from a thread outside the pool, returns -1.
+     */
+    [[nodiscard]] concurrency_t get_thread_index() const
+    {
+        const std::thread::id this_thread_id = std::this_thread::get_id();
+        for (concurrency_t i = 0; i < thread_count; ++i)
+        {
+            if (threads[i].get_id() == this_thread_id)
+                return i;
+        }
+        return static_cast<concurrency_t>(-1);
+    }
+
 private:
     // ========================
     // Private member functions
