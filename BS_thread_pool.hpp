@@ -427,7 +427,7 @@ public:
         std::function<void()> task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...);
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
-            tasks.push(task_function);
+            tasks.push(std::move(task_function));
         }
         ++tasks_total;
         task_available_cv.notify_one();
@@ -466,7 +466,7 @@ public:
         std::function<R()> task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...);
         std::shared_ptr<std::promise<R>> task_promise = std::make_shared<std::promise<R>>();
         push_task(
-            [task_function, task_promise]
+            [task_function {std::move(task_function)}, task_promise]
             {
                 try
                 {

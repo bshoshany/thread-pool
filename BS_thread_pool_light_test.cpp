@@ -215,6 +215,24 @@ void check_push_task()
     }
 }
 
+class copy_counter {
+public:
+    copy_counter() = default;
+
+    copy_counter(const copy_counter& other): counter{other.counter + 1}
+    {
+        std::cout << "Counter is now" << counter << '\n';
+    }
+    copy_counter(copy_counter&&) = default;
+
+    unsigned value() const noexcept
+    {
+        return counter;
+    }
+private:
+       unsigned counter = 0;
+};
+
 /**
  * @brief Check that submit() works.
  */
@@ -274,6 +292,15 @@ void check_submit()
             },
             &flag1, &flag2);
         check(flag_future.get() == 42 && flag1 && flag2);
+    }
+    println("Checking that submit() doesn't create extra copies of the function object...");
+    {
+        std::future<unsigned> copy_future = pool.submit(
+            [counter {copy_counter()}]()
+            {
+                return counter.value();
+            });
+        check(0u, copy_future.get());
     }
 }
 
