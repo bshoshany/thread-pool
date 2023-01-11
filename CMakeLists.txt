@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(bshoshany-thread-pool VERSION 3.3.0 LANGUAGES C CXX)
+project(BSThreadPool VERSION 3.3.0 LANGUAGES C CXX)
 
 
 add_library(${PROJECT_NAME} INTERFACE)
