@@ -29,7 +29,7 @@ write_basic_package_version_file("${PROJECT_NAME}ConfigVersion.cmake"
 
 # Create a configuration file
 configure_package_config_file(
-    "${PROJECT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
+    "${PROJECT_SOURCE_DIR}/cmake/config.cmake.in"
     "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
     INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/${PROJECT_NAME}
     PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
