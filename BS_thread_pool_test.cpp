@@ -56,8 +56,11 @@ BS::synced_stream sync_cout(std::cout);
 std::ofstream log_file;
 BS::synced_stream sync_file(log_file);
 
+// Global variable that counts how many timed per-thread initializaton function was called
+std::atomic<BS::concurrency_t> thread_init_invocation_count = {};
+
 // A global thread pool object to be used throughout the test.
-BS::thread_pool pool;
+BS::thread_pool pool(0, [](BS::concurrency_t) { thread_init_invocation_count.fetch_add(1, std::memory_order_release); });
 
 // A global random_device object to be used to seed some random number generators.
 std::random_device rd;
@@ -214,6 +217,8 @@ void check_constructor()
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
+    dual_println("Checking that provided thread initializaton function was executed once per thread...");
+    check(pool.get_thread_count(), thread_init_invocation_count.load(std::memory_order_consume));
 }
 
 /**
@@ -221,16 +226,33 @@ void check_constructor()
  */
 void check_reset()
 {
-    pool.reset(std::thread::hardware_concurrency() / 2);
+    const BS::concurrency_t half_hardware_concurrency = std::max(std::thread::hardware_concurrency() / 2, static_cast<BS::concurrency_t>(1u));
+    std::unique_ptr<bool[]> initializaton_results_array = std::make_unique<bool[]>(half_hardware_concurrency);
+    pool.reset(half_hardware_concurrency, [&initializaton_results_array](BS::concurrency_t thread_id) { initializaton_results_array[thread_id] = true; });
     dual_println("Checking that after reset() the thread pool reports a number of threads equal to half the hardware concurrency...");
-    check(std::thread::hardware_concurrency() / 2, pool.get_thread_count());
+    check(half_hardware_concurrency, pool.get_thread_count());
     dual_println("Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
-    pool.reset(std::thread::hardware_concurrency());
+    dual_println("Checking that reset() call executed initializaton function in every thread...");
+    bool every_thread_initialized = true;
+    for (BS::concurrency_t i = 0; i < half_hardware_concurrency; ++i)
+    {
+        every_thread_initialized = every_thread_initialized && initializaton_results_array[i];
+    }
+    check(every_thread_initialized);
+    initializaton_results_array = std::make_unique<bool[]>(std::thread::hardware_concurrency());
+    pool.reset(std::thread::hardware_concurrency(), [&initializaton_results_array](BS::concurrency_t thread_id) { initializaton_results_array[thread_id] = true; });
     dual_println("Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...");
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
+    dual_println("Checking that second reset() call executed initializaton function in every thread...");
+    every_thread_initialized = true;
+    for (BS::concurrency_t i = 0; i < std::thread::hardware_concurrency(); ++i)
+    {
+        every_thread_initialized = every_thread_initialized && initializaton_results_array[i];
+    }
+    check(every_thread_initialized);
 }
 
 // =======================================

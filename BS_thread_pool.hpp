@@ -248,10 +248,11 @@ public:
      * @brief Construct a new thread pool.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
+     * @param thread_init_function_ A function to run in every thread once after creation and before any tasks, accepting thread id in range [0, thread count) as argument. Default is to do nothing. Constructor will block until all threads have finished executing it.
      */
-    thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
+    thread_pool(const concurrency_t thread_count_ = 0, const std::function<void(concurrency_t)>& thread_init_function_ = [](concurrency_t) {}) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
-        create_threads();
+        create_threads(thread_init_function_);
     }
 
     /**
@@ -437,8 +438,9 @@ public:
      * @brief Reset the number of threads in the pool. Waits for all currently running tasks to be completed, then destroys all threads in the pool and creates a new thread pool with the new number of threads. Any tasks that were waiting in the queue before the pool was reset will then be executed by the new threads. If the pool was paused before resetting it, the new pool will be paused as well.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
+     * @param thread_init_function_ A function to run in every thread once after creation and before any tasks, accepting thread id in range [0, thread count) as argument. Default is to do nothing. Call to this function will block until all threads have finished executing it.
      */
-    void reset(const concurrency_t thread_count_ = 0)
+    void reset(const concurrency_t thread_count_ = 0, const std::function<void(concurrency_t)>& thread_init_function_ = [](concurrency_t) {})
     {
         const bool was_paused = paused;
         paused = true;
@@ -447,7 +449,7 @@ public:
         thread_count = determine_thread_count(thread_count_);
         threads = std::make_unique<std::thread[]>(thread_count);
         paused = was_paused;
-        create_threads();
+        create_threads(thread_init_function_);
     }
 
     /**
@@ -520,14 +522,31 @@ private:
 
     /**
      * @brief Create the threads in the pool and assign a worker to each thread.
+     *
+     * @param thread_init_function A function to run in every thread once after creation and before any tasks, accepting thread id in range [0, thread count) as argument. It will be completed in every thread before returning.
      */
-    void create_threads()
+    void create_threads(const std::function<void(concurrency_t)>& thread_init_function)
     {
+        concurrency_t initialized_thread_count = 0;
+        std::condition_variable thread_initialization_done_cv = {};
+        std::mutex initialized_thread_count_mutex = {};
         running = true;
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
-            threads[i] = std::thread(&thread_pool::worker, this);
+            threads[i] = std::thread(&thread_pool::worker, this,
+                [&initialized_thread_count, &thread_initialization_done_cv, &initialized_thread_count_mutex, thread_init_function, i]
+                {
+                    thread_init_function(i);
+                    {
+                        std::unique_lock<std::mutex> initialized_thread_count_lock(initialized_thread_count_mutex);
+                        ++initialized_thread_count;
+                    }
+                    thread_initialization_done_cv.notify_one();
+                }
+            );
         }
+        std::unique_lock<std::mutex> initialized_thread_count_lock(initialized_thread_count_mutex);
+        thread_initialization_done_cv.wait(initialized_thread_count_lock, [this, &initialized_thread_count] { return (initialized_thread_count == thread_count); });
     }
 
     /**
@@ -565,8 +584,10 @@ private:
     /**
      * @brief A worker function to be assigned to each thread in the pool. Waits until it is notified by push_task() that a task is available, and then retrieves the task from the queue and executes it. Once the task finishes, the worker notifies wait_for_tasks() in case it is waiting.
      */
-    void worker()
+    void worker(std::function<void()> thread_init_function)
     {
+        thread_init_function();
+        thread_init_function = {};
         while (running)
         {
             std::function<void()> task;

@@ -37,8 +37,11 @@
 // Global variables
 // ================
 
+// Global variable that counts how many timed per-thread initializaton function was called
+std::atomic<BS::concurrency_t> thread_init_invocation_count = {};
+
 // A global thread pool object to be used throughout the test.
-BS::thread_pool_light pool;
+BS::thread_pool_light pool(0, [](BS::concurrency_t) { thread_init_invocation_count.fetch_add(1, std::memory_order_release); });
 
 // A global random_device object to be used to seed some random number generators.
 std::random_device rd;
@@ -180,6 +183,8 @@ void check_constructor()
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     println("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
+    println("Checking that provided thread initializaton function was executed once per thread...");
+    check(pool.get_thread_count(), thread_init_invocation_count.load(std::memory_order_consume));
 }
 
 // =======================================
