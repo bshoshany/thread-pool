@@ -222,7 +222,10 @@ private:
     void destroy_threads()
     {
         running = false;
-        task_available_cv.notify_all();
+        {
+            std::scoped_lock<std::mutex> tasks_lock(tasks_mutex);
+            task_available_cv.notify_all();
+        }
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i].join();
