@@ -1,9 +1,9 @@
 /**
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.3.0
- * @date 2022-08-03
- * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @version 3.4.0
+ * @date 2023-05-12
+ * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
  */
@@ -18,6 +18,7 @@
 #include <chrono>             // std::chrono
 #include <cmath>              // std::abs, std::cos, std::exp, std::llround, std::log, std::round, std::sin, std::sqrt
 #include <condition_variable> // std::condition_variable
+#include <cstdlib>            // std::quick_exit
 #include <ctime>              // std::localtime, std::strftime, std::time, std::time_t
 #include <exception>          // std::exception
 #include <fstream>            // std::ofstream
@@ -25,14 +26,13 @@
 #include <iomanip>            // std::setprecision, std::setw
 #include <ios>                // std::fixed
 #include <iostream>           // std::cout
-#include <limits>             // std::numeric_limits
 #include <memory>             // std::make_unique, std::unique_ptr
 #include <mutex>              // std::mutex, std::scoped_lock, std::unique_lock
 #include <random>             // std::mt19937_64, std::random_device, std::uniform_int_distribution
 #include <stdexcept>          // std::runtime_error
 #include <string>             // std::string, std::to_string
 #include <thread>             // std::this_thread, std::thread
-#include <utility>            // std::pair
+#include <utility>            // std::forward, std::pair
 #include <vector>             // std::begin, std::end, std::vector
 
 // Include the header file for the thread pool library.
@@ -51,9 +51,16 @@ constexpr bool enable_tests = true;
 // Whether to perform the benchmarks.
 constexpr bool enable_benchmarks = true;
 
-// Two global synced_streams objects. One prints to std::cout, and the other to a file.
+// Whether to perform the long deadlock tests. Defaults to false since they can take much longer than the other tests.
+constexpr bool enable_long_deadlock_tests = false;
+
+// A global synced_stream object which prints to std::cout.
 BS::synced_stream sync_cout(std::cout);
+
+// A global stream object used to access the log file.
 std::ofstream log_file;
+
+// A global synced_stream object which prints to the log file.
 BS::synced_stream sync_file(log_file);
 
 // A global thread pool object to be used throughout the test.
@@ -62,8 +69,10 @@ BS::thread_pool pool;
 // A global random_device object to be used to seed some random number generators.
 std::random_device rd;
 
-// Global variables to measure how many checks succeeded and how many failed.
+// A global variable to measure how many checks succeeded.
 size_t tests_succeeded = 0;
+
+// A global variable to measure how many checks failed.
 size_t tests_failed = 0;
 
 // ================
@@ -170,39 +179,41 @@ void check(const T1 expected, const T2 obtained)
 /**
  * @brief Count the number of unique threads in the pool. Submits a number of tasks equal to twice the thread count into the pool. Each task stores the ID of the thread running it, and then waits until released by the main thread. This ensures that each thread in the pool runs at least one task. The number of unique thread IDs is then counted from the stored IDs.
  */
-std::condition_variable ID_cv, total_cv;
-std::mutex ID_mutex, total_mutex;
 BS::concurrency_t count_unique_threads()
 {
-    const BS::concurrency_t num_tasks = pool.get_thread_count() * 2;
-    std::vector<std::thread::id> thread_IDs(num_tasks);
-    std::unique_lock<std::mutex> total_lock(total_mutex);
-    BS::concurrency_t total_count = 0;
-    bool ID_release = false;
-    pool.wait_for_tasks();
-    for (std::thread::id& id : thread_IDs)
-        pool.push_task(
-            [&total_count, &id, &ID_release]
-            {
-                id = std::this_thread::get_id();
-                {
-                    const std::scoped_lock total_lock_local(total_mutex);
-                    ++total_count;
-                }
-                total_cv.notify_one();
-                std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
-                ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
-            });
-    total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
+    std::condition_variable ID_cv, total_cv;
+    std::mutex ID_mutex, total_mutex;
     {
-        const std::scoped_lock ID_lock(ID_mutex);
-        ID_release = true;
+        const BS::concurrency_t num_tasks = pool.get_thread_count() * 2;
+        std::vector<std::thread::id> thread_IDs(num_tasks);
+        std::unique_lock<std::mutex> total_lock(total_mutex);
+        BS::concurrency_t total_count = 0;
+        bool ID_release = false;
+        pool.wait_for_tasks();
+        for (std::thread::id& id : thread_IDs)
+            pool.push_task(
+                [&total_count, &id, &ID_release, &ID_cv, &total_cv, &ID_mutex, &total_mutex]
+                {
+                    id = std::this_thread::get_id();
+                    {
+                        const std::scoped_lock total_lock_local(total_mutex);
+                        ++total_count;
+                    }
+                    total_cv.notify_one();
+                    std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
+                    ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
+                });
+        total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
+        {
+            const std::scoped_lock ID_lock(ID_mutex);
+            ID_release = true;
+        }
+        ID_cv.notify_all();
+        total_cv.wait(total_lock, [&total_count, &num_tasks] { return total_count == num_tasks; });
+        pool.wait_for_tasks();
+        std::sort(thread_IDs.begin(), thread_IDs.end());
+        return static_cast<BS::concurrency_t>(std::unique(thread_IDs.begin(), thread_IDs.end()) - thread_IDs.begin());
     }
-    ID_cv.notify_all();
-    total_cv.wait(total_lock, [&total_count, &num_tasks] { return total_count == num_tasks; });
-    pool.wait_for_tasks();
-    std::sort(thread_IDs.begin(), thread_IDs.end());
-    return static_cast<BS::concurrency_t>(std::unique(thread_IDs.begin(), thread_IDs.end()) - thread_IDs.begin());
 }
 
 /**
@@ -231,6 +242,75 @@ void check_reset()
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), count_unique_threads());
+}
+
+// ================================
+// Functions to check for deadlocks
+// ================================
+
+// An auxiliary thread pool used by check_deadlock().
+BS::thread_pool check_deadlock_pool;
+
+/**
+ * @brief Check that the specified function does not create deadlocks. The function will be run many times to increase the probability of encountering a deadlock as a result of subtle timing issues. Uses an auxiliary pool so the whole test doesn't get stuck if a deadlock is encountered.
+ *
+ * @tparam F The type of the function.
+ * @param task The function to try.
+ */
+template <typename F>
+void check_deadlock(const F&& task)
+{
+    constexpr uint32_t tries = 10000;
+    uint32_t i = 0;
+    check_deadlock_pool.push_task(
+        [&i, &task]
+        {
+            do
+                task();
+            while (++i < tries);
+        });
+    bool passed = false;
+    while (true)
+    {
+        uint32_t old_i = i;
+        check_deadlock_pool.wait_for_tasks_duration(std::chrono::milliseconds(500));
+        if (i == tries)
+        {
+            dual_println("Successfully finished all tries!");
+            passed = true;
+            break;
+        }
+        else if (i > old_i)
+        {
+            dual_println("Finished ", i, " tries out of ", tries, "...");
+        }
+        else
+        {
+            dual_println("Error: deadlock detected!");
+            passed = false;
+            break;
+        }
+    }
+    check(passed);
+}
+
+/**
+ * @brief Check that the destructor does not create deadlocks.
+ */
+void check_destructor_deadlock()
+{
+    dual_println("Checking for destruction deadlocks...");
+    check_deadlock([] { BS::thread_pool temp_pool; });
+}
+
+/**
+ * @brief Check that reset() does not create deadlocks.
+ */
+void check_reset_deadlock()
+{
+    dual_println("Checking for reset deadlocks...");
+    BS::thread_pool temp_pool;
+    check_deadlock([&temp_pool] { temp_pool.reset(); });
 }
 
 // =======================================
@@ -504,6 +584,95 @@ void check_wait_for_tasks()
     check(all_flags);
 }
 
+/**
+ * @brief Check that calling wait_for_tasks() more than once doesn't create a deadlock. Uses a mechanism similar to check_deadlock().
+ */
+void check_wait_for_tasks_deadlock()
+{
+    dual_println("Checking for deadlocks when waiting for tasks...");
+    BS::thread_pool temp_pool(1);
+    temp_pool.push_task([] { std::this_thread::sleep_for(std::chrono::milliseconds(500)); });
+    constexpr uint32_t n_waiting_tasks = 1000;
+    std::atomic<uint32_t> count = 0;
+    for (uint32_t j = 0; j < n_waiting_tasks; ++j)
+    {
+        check_deadlock_pool.push_task(
+            [&temp_pool, &count]
+            {
+                temp_pool.wait_for_tasks();
+                ++count;
+            });
+    }
+    bool passed = false;
+    while (true)
+    {
+        uint32_t old_count = count;
+        check_deadlock_pool.wait_for_tasks_duration(std::chrono::milliseconds(1000));
+        if (count == n_waiting_tasks)
+        {
+            dual_println("All waiting tasks successfully finished!");
+            passed = true;
+            break;
+        }
+        else if (count > old_count)
+        {
+            dual_println(count, " tasks out of ", n_waiting_tasks, " finished waiting...");
+        }
+        else
+        {
+            dual_println("Error: deadlock detected!");
+            passed = false;
+            break;
+        }
+    }
+    check(passed);
+}
+
+/**
+ * @brief Check that wait_for_tasks_duration() works.
+ */
+void check_wait_for_tasks_duration()
+{
+    dual_println("Checking that wait_for_tasks_duration() works...");
+    pool.reset();
+    std::atomic<bool> done = false;
+    pool.push_task(
+        [&done]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            done = true;
+        });
+    dual_println("Task submitted. Waiting for 10ms...");
+    pool.wait_for_tasks_duration(std::chrono::milliseconds(10));
+    check(!done);
+    dual_println("Waiting for 500ms...");
+    pool.wait_for_tasks_duration(std::chrono::milliseconds(500));
+    check(done);
+}
+
+/**
+ * @brief Check that wait_for_tasks_until() works.
+ */
+void check_wait_for_tasks_until()
+{
+    dual_println("Checking that wait_for_tasks_until() works...");
+    pool.reset();
+    std::atomic<bool> done = false;
+    pool.push_task(
+        [&done]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            done = true;
+        });
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    dual_println("Task submitted. Waiting until 10ms from submission time...");
+    pool.wait_for_tasks_until(now + std::chrono::milliseconds(10));
+    check(!done);
+    dual_println("Waiting until 500ms from submission time...");
+    pool.wait_for_tasks_until(now + std::chrono::milliseconds(500));
+    check(done);
+}
+
 // ========================================
 // Functions to verify loop parallelization
 // ========================================
@@ -523,7 +692,7 @@ void check_parallelize_loop_no_return(const int64_t random_start, T random_end, 
         ++random_end;
     dual_println("Verifying that ", use_push ? "push_loop()" : "parallelize_loop()", " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices...");
     const size_t num_indices = static_cast<size_t>(std::abs(random_end - random_start));
-    const int64_t offset = std::min(random_start, static_cast<int64_t>(random_end));
+    const int64_t offset = std::min<int64_t>(random_start, static_cast<int64_t>(random_end));
     std::unique_ptr<std::atomic<bool>[]> flags = std::make_unique<std::atomic<bool>[]>(num_indices);
     const auto loop = [&flags, offset](const int64_t start, const int64_t end)
     {
@@ -580,7 +749,7 @@ void check_parallelize_loop_return(const int64_t random_start, int64_t random_en
 /**
  * @brief Check that push_loop() and parallelize_loop() work using several different random values for the range of indices and number of tasks.
  */
-void check_parallelize_loop()
+void check_push_loop()
 {
     std::mt19937_64 mt(rd());
     std::uniform_int_distribution<int64_t> index_dist(-1000000, 1000000);
@@ -850,9 +1019,12 @@ void do_tests()
 
     print_header("Checking that wait_for_tasks() works...");
     check_wait_for_tasks();
+    check_wait_for_tasks_deadlock();
+    check_wait_for_tasks_duration();
+    check_wait_for_tasks_until();
 
     print_header("Checking that push_loop() and parallelize_loop() work:");
-    check_parallelize_loop();
+    check_push_loop();
 
     print_header("Checking that task monitoring works:");
     check_task_monitoring();
@@ -961,8 +1133,8 @@ void check_performance()
 
     // Test how many vectors we need to generate, and of what size, to roughly achieve the target execution time.
     dual_println("Determining the number and size of vectors to generate in order to achieve an approximate mean execution time of ", target_ms, " ms with ", thread_count, " tasks...");
-    size_t num_vectors = 64;
-    size_t vector_size = 64;
+    size_t num_vectors = thread_count;
+    size_t vector_size = thread_count;
     std::vector<std::vector<double>> vectors;
     auto loop = [&vectors, &vector_size](const size_t start, const size_t end)
     {
@@ -1029,7 +1201,7 @@ int main()
         log_file.open(log_filename);
 
     dual_println("BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library");
-    dual_println("(c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)");
+    dual_println("(c) 2023 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)");
     dual_println("GitHub: https://github.com/bshoshany/thread-pool\n");
 
     dual_println("Thread pool library version is ", BS_THREAD_POOL_VERSION, ".");
@@ -1042,6 +1214,13 @@ int main()
     if (enable_tests)
         do_tests();
 
+    if (enable_long_deadlock_tests)
+    {
+        print_header("Checking for deadlocks:");
+        check_destructor_deadlock();
+        check_reset_deadlock();
+    }
+
     if (tests_failed == 0)
     {
         if (enable_tests)
@@ -1052,12 +1231,12 @@ int main()
             check_performance();
             print_header("Thread pool performance test completed!", '+');
         }
-        return EXIT_SUCCESS;
+        return 0;
     }
     else
     {
         print_header("FAILURE: Passed " + std::to_string(tests_succeeded) + " checks, but failed " + std::to_string(tests_failed) + "!", '+');
         dual_println("\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
-        return EXIT_FAILURE;
+        std::quick_exit(static_cast<int>(tests_failed));
     }
 }

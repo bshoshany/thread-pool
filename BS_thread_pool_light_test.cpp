@@ -1,26 +1,22 @@
 /**
  * @file BS_thread_pool_light_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.3.0
- * @date 2022-08-03
- * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @version 3.4.0
+ * @date 2023-05-12
+ * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool_light: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the light version of the main library, but is not needed in order to use the library.
  */
-
-// Get rid of annoying MSVC warning.
-#ifdef _MSC_VER
-#define _CRT_SECURE_NO_WARNINGS
-#endif
 
 #include <algorithm>          // std::min, std::sort, std::unique
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
 #include <cmath>              // std::abs
 #include <condition_variable> // std::condition_variable
+#include <cstdlib>            // std::quick_exit
 #include <exception>          // std::exception
 #include <future>             // std::future
-#include <iostream>           // std::cout, std::endl
+#include <iostream>           // std::cout
 #include <memory>             // std::make_unique, std::unique_ptr
 #include <mutex>              // std::mutex, std::scoped_lock, std::unique_lock
 #include <random>             // std::mt19937_64, std::random_device, std::uniform_int_distribution
@@ -43,8 +39,10 @@ BS::thread_pool_light pool;
 // A global random_device object to be used to seed some random number generators.
 std::random_device rd;
 
-// Global variables to measure how many checks succeeded and how many failed.
+// A global variable to measure how many checks succeeded.
 size_t tests_succeeded = 0;
+
+// A global variable to measure how many checks failed.
 size_t tests_failed = 0;
 
 // ================
@@ -52,7 +50,7 @@ size_t tests_failed = 0;
 // ================
 
 /**
- * @brief Print any number of items into both std::cout and the log file, syncing both independently.
+ * @brief Print any number of items into std::cout.
  *
  * @tparam T The types of the items.
  * @param items The items to print.
@@ -64,7 +62,7 @@ void print(T&&... items)
 }
 
 /**
- * @brief Print any number of items into both std::cout and the log file, syncing both independently. Also prints a newline character, and flushes the stream.
+ * @brief Print any number of items into std::cout, followed by a newline character.
  *
  * @tparam T The types of the items.
  * @param items The items to print.
@@ -72,7 +70,7 @@ void print(T&&... items)
 template <typename... T>
 void println(T&&... items)
 {
-    print(std::forward<T>(items)..., static_cast<std::ostream& (&)(std::ostream&)>(std::endl));
+    print(std::forward<T>(items)..., '\n');
 }
 
 /**
@@ -136,39 +134,41 @@ void check(const T1 expected, const T2 obtained)
 /**
  * @brief Count the number of unique threads in the pool. Submits a number of tasks equal to twice the thread count into the pool. Each task stores the ID of the thread running it, and then waits until released by the main thread. This ensures that each thread in the pool runs at least one task. The number of unique thread IDs is then counted from the stored IDs.
  */
-std::condition_variable ID_cv, total_cv;
-std::mutex ID_mutex, total_mutex;
 BS::concurrency_t count_unique_threads()
 {
-    const BS::concurrency_t num_tasks = pool.get_thread_count() * 2;
-    std::vector<std::thread::id> thread_IDs(num_tasks);
-    std::unique_lock<std::mutex> total_lock(total_mutex);
-    BS::concurrency_t total_count = 0;
-    bool ID_release = false;
-    pool.wait_for_tasks();
-    for (std::thread::id& id : thread_IDs)
-        pool.push_task(
-            [&total_count, &id, &ID_release]
-            {
-                id = std::this_thread::get_id();
-                {
-                    const std::scoped_lock total_lock_local(total_mutex);
-                    ++total_count;
-                }
-                total_cv.notify_one();
-                std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
-                ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
-            });
-    total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
+    std::condition_variable ID_cv, total_cv;
+    std::mutex ID_mutex, total_mutex;
     {
-        const std::scoped_lock ID_lock(ID_mutex);
-        ID_release = true;
+        const BS::concurrency_t num_tasks = pool.get_thread_count() * 2;
+        std::vector<std::thread::id> thread_IDs(num_tasks);
+        std::unique_lock<std::mutex> total_lock(total_mutex);
+        BS::concurrency_t total_count = 0;
+        bool ID_release = false;
+        pool.wait_for_tasks();
+        for (std::thread::id& id : thread_IDs)
+            pool.push_task(
+                [&total_count, &id, &ID_release, &ID_cv, &total_cv, &ID_mutex, &total_mutex]
+                {
+                    id = std::this_thread::get_id();
+                    {
+                        const std::scoped_lock total_lock_local(total_mutex);
+                        ++total_count;
+                    }
+                    total_cv.notify_one();
+                    std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
+                    ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
+                });
+        total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
+        {
+            const std::scoped_lock ID_lock(ID_mutex);
+            ID_release = true;
+        }
+        ID_cv.notify_all();
+        total_cv.wait(total_lock, [&total_count, &num_tasks] { return total_count == num_tasks; });
+        pool.wait_for_tasks();
+        std::sort(thread_IDs.begin(), thread_IDs.end());
+        return static_cast<BS::concurrency_t>(std::unique(thread_IDs.begin(), thread_IDs.end()) - thread_IDs.begin());
     }
-    ID_cv.notify_all();
-    total_cv.wait(total_lock, [&total_count, &num_tasks] { return total_count == num_tasks; });
-    pool.wait_for_tasks();
-    std::sort(thread_IDs.begin(), thread_IDs.end());
-    return static_cast<BS::concurrency_t>(std::unique(thread_IDs.begin(), thread_IDs.end()) - thread_IDs.begin());
 }
 
 /**
@@ -471,7 +471,7 @@ void check_push_loop_no_return(const int64_t random_start, T random_end, const B
         ++random_end;
     println("Verifying that push_loop() from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices...");
     const size_t num_indices = static_cast<size_t>(std::abs(random_end - random_start));
-    const int64_t offset = std::min(random_start, static_cast<int64_t>(random_end));
+    const int64_t offset = std::min<int64_t>(random_start, static_cast<int64_t>(random_end));
     std::unique_ptr<std::atomic<bool>[]> flags = std::make_unique<std::atomic<bool>[]>(num_indices);
     const auto loop = [&flags, offset](const int64_t start, const int64_t end)
     {
@@ -492,7 +492,7 @@ void check_push_loop_no_return(const int64_t random_start, T random_end, const B
 /**
  * @brief Check that push_loop() works using several different random values for the range of indices and number of tasks.
  */
-void check_parallelize_loop()
+void check_push_loop()
 {
     std::mt19937_64 mt(rd());
     std::uniform_int_distribution<int64_t> index_dist(-1000000, 1000000);
@@ -621,7 +621,7 @@ void do_tests()
     check_wait_for_tasks();
 
     print_header("Checking that push_loop() works:");
-    check_parallelize_loop();
+    check_push_loop();
 
     print_header("Checking that exception handling works:");
     check_exceptions();
@@ -633,10 +633,10 @@ void do_tests()
 int main()
 {
     println("BS::thread_pool_light: a fast, lightweight, and easy-to-use C++17 thread pool library");
-    println("(c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)");
+    println("(c) 2023 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)");
     println("GitHub: https://github.com/bshoshany/thread-pool\n");
 
-    println("Thread pool library version is ", BS_THREAD_POOL_VERSION, ".");
+    println("Thread pool library version is ", BS_THREAD_POOL_LIGHT_VERSION, ".");
     println("Hardware concurrency is ", std::thread::hardware_concurrency(), ".");
 
     println("Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!");
@@ -646,12 +646,12 @@ int main()
     if (tests_failed == 0)
     {
         print_header("SUCCESS: Passed all " + std::to_string(tests_succeeded) + " checks!", '+');
-        return EXIT_SUCCESS;
+        return 0;
     }
     else
     {
         print_header("FAILURE: Passed " + std::to_string(tests_succeeded) + " checks, but failed " + std::to_string(tests_failed) + "!", '+');
         println("\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
-        return EXIT_FAILURE;
+        std::quick_exit(static_cast<int>(tests_failed));
     }
 }

@@ -3,14 +3,14 @@
 /**
  * @file BS_thread_pool_light.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.3.0
- * @date 2022-08-03
- * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @version 3.4.0
+ * @date 2023-05-12
+ * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool_light: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains a light version of the main library, for use when advanced features are not needed.
  */
 
-#define BS_THREAD_POOL_VERSION "v3.3.0 (2022-08-03) [light]"
+#define BS_THREAD_POOL_LIGHT_VERSION "v3.4.0 (2023-05-12)"
 
 #include <atomic>             // std::atomic
 #include <condition_variable> // std::condition_variable
@@ -139,8 +139,8 @@ public:
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             tasks.push(task_function);
+            ++tasks_total;
         }
-        ++tasks_total;
         task_available_cv.notify_one();
     }
 
@@ -193,10 +193,13 @@ public:
      */
     void wait_for_tasks()
     {
-        waiting = true;
-        std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-        task_done_cv.wait(tasks_lock, [this] { return (tasks_total == 0); });
-        waiting = false;
+        if (!waiting)
+        {
+            waiting = true;
+            std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
+            task_done_cv.wait(tasks_lock, [this] { return (tasks_total == 0); });
+            waiting = false;
+        }
     }
 
 private:
@@ -222,7 +225,10 @@ private:
     void destroy_threads()
     {
         running = false;
-        task_available_cv.notify_all();
+        {
+            const std::scoped_lock tasks_lock(tasks_mutex);
+            task_available_cv.notify_all();
+        }
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i].join();

@@ -3,14 +3,14 @@
 /**
  * @file BS_thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.3.0
- * @date 2022-08-03
- * @copyright Copyright (c) 2022 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @version 3.4.0
+ * @date 2023-05-12
+ * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains the entire library, including the main BS::thread_pool class and the helper classes BS::multi_future, BS::blocks, BS:synced_stream, and BS::timer.
  */
 
-#define BS_THREAD_POOL_VERSION "v3.3.0 (2022-08-03)"
+#define BS_THREAD_POOL_VERSION "v3.4.0 (2023-05-12)"
 
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
@@ -428,8 +428,8 @@ public:
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             tasks.push(task_function);
+            ++tasks_total;
         }
-        ++tasks_total;
         task_available_cv.notify_one();
     }
 
@@ -507,10 +507,57 @@ public:
      */
     void wait_for_tasks()
     {
-        waiting = true;
-        std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
-        task_done_cv.wait(tasks_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
-        waiting = false;
+        if (!waiting)
+        {
+            waiting = true;
+            std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
+            task_done_cv.wait(tasks_lock, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
+            waiting = false;
+        }
+    }
+
+    /**
+     * @brief Wait for tasks to be completed, but stop waiting after the specified duration has passed.
+     *
+     * @tparam R An arithmetic type representing the number of ticks to wait.
+     * @tparam P An std::ratio representing the length of each tick in seconds.
+     * @param duration The time duration to wait.
+     * @return true if finished waiting before the duration expired, false if timed out or the pool is already waiting. In other words, returns false if and only if tasks are still running.
+     */
+    template <typename R, typename P>
+    bool wait_for_tasks_duration(const std::chrono::duration<R, P>& duration)
+    {
+        if (!waiting)
+        {
+            waiting = true;
+            std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
+            const bool status = task_done_cv.wait_for(tasks_lock, duration, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
+            waiting = false;
+            return status;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Wait for tasks to be completed, but stop waiting after the specified time point has been reached.
+     *
+     * @tparam C The type of the clock used to measure time.
+     * @tparam D An std::chrono::duration type used to indicate the time point.
+     * @param timeout_time The time point at which to stop waiting.
+     * @return true if finished waiting before the time point was reached, false if timed out or the pool is already waiting. In other words, returns false if and only if tasks are still running.
+     */
+    template <typename C, typename D>
+    bool wait_for_tasks_until(const std::chrono::time_point<C, D>& timeout_time)
+    {
+        if (!waiting)
+        {
+            waiting = true;
+            std::unique_lock<std::mutex> tasks_lock(tasks_mutex);
+            const bool status = task_done_cv.wait_until(tasks_lock, timeout_time, [this] { return (tasks_total == (paused ? tasks.size() : 0)); });
+            waiting = false;
+            return status;
+        }
+        return false;
     }
 
 private:
@@ -536,7 +583,10 @@ private:
     void destroy_threads()
     {
         running = false;
-        task_available_cv.notify_all();
+        {
+            const std::scoped_lock tasks_lock(tasks_mutex);
+            task_available_cv.notify_all();
+        }
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i].join();

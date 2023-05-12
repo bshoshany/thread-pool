@@ -10,12 +10,12 @@
 
 # `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
-By Barak Shoshany<br />
-Email: [baraksh@gmail.com](mailto:baraksh@gmail.com)<br />
-Website: [https://baraksh.com/](https://baraksh.com/)<br />
-GitHub: [https://github.com/bshoshany](https://github.com/bshoshany)<br />
+By Barak Shoshany\
+Email: <baraksh@gmail.com>\
+Website: <https://baraksh.com/>\
+GitHub: <https://github.com/bshoshany>
 
-This is the complete documentation for v3.3.0 of the library, released on 2022-08-03.
+This is the complete documentation for v3.4.0 of the library, released on 2023-05-12.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
@@ -32,8 +32,10 @@ This is the complete documentation for v3.3.0 of the library, released on 2022-0
     * [Submitting tasks to the queue with futures](#submitting-tasks-to-the-queue-with-futures)
     * [Submitting tasks to the queue without futures](#submitting-tasks-to-the-queue-without-futures)
     * [Manually waiting for all tasks to complete](#manually-waiting-for-all-tasks-to-complete)
+    * [Waiting with a timeout](#waiting-with-a-timeout)
     * [Submitting class member functions to the queue](#submitting-class-member-functions-to-the-queue)
-    * [Parallelizing loops](#parallelizing-loops)
+* [Parallelizing loops](#parallelizing-loops)
+    * [Automatic parallelization of loops](#automatic-parallelization-of-loops)
     * [Loops with return values](#loops-with-return-values)
     * [Parallelizing loops without futures](#parallelizing-loops-without-futures)
 * [Helper classes](#helper-classes)
@@ -58,13 +60,13 @@ This is the complete documentation for v3.3.0 of the library, released on 2022-0
 
 ### Motivation
 
-Multithreading is essential for modern high-performance computing. Since C++11, the C++ standard library has included built-in low-level multithreading support using constructs such as `std::thread`. However, `std::thread` creates a new thread each time it is called, which can have a significant performance overhead. Furthermore, it is possible to create more threads than the hardware can handle simultaneously, potentially resulting in a substantial slowdown.
+Multithreading is essential for modern high-performance computing. Since C\+\+11, the C++ standard library has included built-in low-level multithreading support using constructs such as `std::thread`. However, `std::thread` creates a new thread each time it is called, which can have a significant performance overhead. Furthermore, it is possible to create more threads than the hardware can handle simultaneously, potentially resulting in a substantial slowdown.
 
-The library presented here contains a thread pool class, `BS::thread_pool`, which avoids these issues by creating a fixed pool of threads once and for all, and then continuously reusing the same threads to perform different tasks throughout the lifetime of the program. By default, the number of threads in the pool is equal to the maximum number of threads that the hardware can run in parallel.
+The library presented here contains a C++ thread pool class, `BS::thread_pool`, which avoids these issues by creating a fixed pool of threads once and for all, and then continuously reusing the same threads to perform different tasks throughout the lifetime of the program. By default, the number of threads in the pool is equal to the maximum number of threads that the hardware can run in parallel.
 
 The user submits tasks to be executed into a queue. Whenever a thread becomes available, it retrieves the next task from the queue and executes it. The pool automatically produces an `std::future` for each task, which allows the user to wait for the task to finish executing and/or obtain its eventual return value, if applicable. Threads and tasks are autonomously managed by the pool in the background, without requiring any input from the user aside from submitting the desired tasks.
 
-The design of this package was guided by four important principles. First, *compactness*: the entire library consists of just one small self-contained header file, with no other components or dependencies. Second, *portability*: the package only utilizes the C++17 standard library, without relying on any compiler extensions or 3rd-party libraries, and is therefore compatible with any modern standards-conforming C++17 compiler on any platform. Third, *ease of use*: the package is extensively documented, and programmers of any level should be able to use it right out of the box.
+The design of this package was guided by four important principles. First, *compactness*: the entire library consists of just one small self-contained header file, with no other components or dependencies. Second, *portability*: the package only utilizes the C\+\+17 standard library, without relying on any compiler extensions or 3rd-party libraries, and is therefore compatible with any modern standards-conforming C\+\+17 compiler on any platform. Third, *ease of use*: the package is extensively documented, and programmers of any level should be able to use it right out of the box.
 
 The fourth and final guiding principle is *performance*: each and every line of code in this library was carefully designed with maximum performance in mind, and performance was tested and verified on a variety of compilers and platforms. Indeed, the library was originally designed for use in the author's own computationally-intensive scientific computing projects, running both on high-end desktop/laptop computers and high-performance computing nodes.
 
@@ -84,7 +86,7 @@ Other, more advanced multithreading libraries may offer more features and/or hig
     * Self-contained: no external requirements or dependencies.
     * Portable: uses only the C++ standard library, and works with any C++17-compliant compiler.
     * Only ~340 lines of code, excluding comments and blank lines.
-    * A stand-alone "light version" of the thread pool is also available in the `BS_thread_pool_light.hpp` header file, with only ~170 lines of code.
+    * A stand-alone "light version" of the C++ thread pool is also available in the `BS_thread_pool_light.hpp` header file, with only ~170 lines of code.
 * **Easy to use:**
     * Very simple operation, using a handful of member functions.
     * Every task submitted to the queue using the `submit()` member function automatically generates an `std::future`, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
@@ -106,21 +108,21 @@ Other, more advanced multithreading libraries may offer more features and/or hig
 
 ### Compiling and compatibility
 
-This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available. Compatibility was verified with a 12-core / 24-thread AMD Ryzen 9 3900X CPU using the following compilers and platforms:
+This library should successfully compile on any C++17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available. Compatibility was verified with a 24-core (8P+16E) / 32-thread Intel i9-13900K CPU using the following compilers and platforms:
 
-* Windows 11 build 22000.795:
-    * [Clang](https://clang.llvm.org/) v14.0.6
-    * [GCC](https://gcc.gnu.org/) v12.1.0 ([WinLibs build](https://winlibs.com/))
-    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.32.31332
-* Ubuntu 22.04 LTS:
-    * [Clang](https://clang.llvm.org/) v14.0.0
-    * [GCC](https://gcc.gnu.org/) v12.0.1
+* Windows 11 build 22621.1702:
+    * [Clang](https://clang.llvm.org/) v16.0.3
+    * [GCC](https://gcc.gnu.org/) v13.1.0 ([WinLibs build](https://winlibs.com/))
+    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.35.32217.1
+* Ubuntu 22.10:
+    * [Clang](https://clang.llvm.org/) v15.0.7
+    * [GCC](https://gcc.gnu.org/) v12.2.0
 
-In addition, this library was tested on a [Compute Canada](https://www.computecanada.ca/) node equipped with two 20-core / 40-thread Intel Xeon Gold 6148 CPUs (for a total of 40 cores and 80 threads), running CentOS Linux 7.9.2009, using [GCC](https://gcc.gnu.org/) v12.1.1.
+In addition, this library was tested on a [Digital Research Alliance of Canada](https://alliancecan.ca/en) node equipped with two 20-core / 40-thread Intel Xeon Gold 6148 CPUs (for a total of 40 cores and 80 threads), running CentOS Linux 7.9.2009, using [GCC](https://gcc.gnu.org/) v12.2.0.
 
 The test program `BS_thread_pool_test.cpp` was compiled without warnings (with the warning flags `-Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow` in GCC/Clang and `/W4` in MSVC), executed, and successfully completed all [automated tests](#testing-the-package) and benchmarks using all of the compilers and systems mentioned above.
 
-As this library requires C++17 features, the code must be compiled with C++17 support:
+As this library requires C\+\+17 features, the code must be compiled with C\+\+17 support:
 
 * For Clang or GCC, use the `-std=c++17` flag. On Linux, you will also need to use the `-pthread` flag to enable the POSIX threads library.
 * For MSVC, use `/std:c++17`, and preferably also `/permissive-` to ensure standards conformance.
@@ -153,7 +155,7 @@ On Windows:
 .\vcpkg install bshoshany-thread-pool:x86-windows bshoshany-thread-pool:x64-windows
 ```
 
-The thread pool will then be available automatically in the build system you integrated vcpkg with (e.g. MSBuild or CMake). Simply write `#include "BS_thread_pool.hpp"` in any project to use the thread pool, without having to copy to file into the project first. I will update the vcpkg port with each new release, so it will be updated automatically when you run `vcpkg upgrade`.
+The C++ thread pool will then be available automatically in the build system you integrated vcpkg with (e.g. MSBuild or CMake). Simply write `#include "BS_thread_pool.hpp"` in any project to use the thread pool, without having to copy to file into the project first. I will update the vcpkg port with each new release, so it will be updated automatically when you run `vcpkg upgrade`.
 
 Please see the [vcpkg repository](https://github.com/microsoft/vcpkg) for more information on how to use vcpkg.
 
@@ -212,7 +214,7 @@ std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION << ".\n
 Sample output:
 
 ```none
-Thread pool library version is v3.1.0 (2022-07-13).
+Thread pool library version is v3.4.0 (2023-05-12).
 ```
 
 This can be used, for example, to allow the same code to work with several incompatible versions of the library.
@@ -371,6 +373,51 @@ after the `for` loop will ensure - as efficiently as possible - that all tasks h
 
 Note, however, that `wait_for_tasks()` will wait for **all** the tasks in the queue, including those that are unrelated to the `for` loop. Using [`parallelize_loop()`](#parallelizing-loops) would make much more sense in this particular case, as it will allow waiting only for the tasks related to the loop.
 
+### Waiting with a timeout
+
+Sometimes you may wish to wait for the tasks to complete, but only for a certain amount of time, or until a specific point in time. For example, if the tasks have not yet completed after some time, you may wish to let the user know that there is a delay. This can be achieved using two member functions:
+
+* `wait_for_tasks_duration()` waits for the tasks to be completed, but stops waiting after the specified duration, given as an argument of type `std::chrono::duration`, has passed.
+* `wait_for_tasks_until()` waits for the tasks to be completed, but stops waiting after the specified time point, given as an argument of type `std::chrono::time_point`, has been reached.
+
+Here is an example:
+
+```cpp
+#include "BS_thread_pool.hpp"
+
+int main()
+{
+    BS::synced_stream sync_out;
+    BS::thread_pool pool;
+    std::atomic<bool> done = false;
+    pool.push_task(
+        [&done]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            done = true;
+        });
+    while (true)
+    {
+        pool.wait_for_tasks_duration(std::chrono::milliseconds(200));
+        if (!done)
+            sync_out.println("Sorry, task is not done yet.");
+        else
+            break;
+    }
+    sync_out.println("Task done!");
+}
+```
+
+The output is:
+
+```none
+Sorry, task is not done yet.
+Sorry, task is not done yet.
+Sorry, task is not done yet.
+Sorry, task is not done yet.
+Task done!
+```
+
 ### Submitting class member functions to the queue
 
 Consider the following program:
@@ -469,7 +516,9 @@ int main()
 }
 ```
 
-### Parallelizing loops
+## Parallelizing loops
+
+### Automatic parallelization of loops
 
 One of the most common and effective methods of parallelization is splitting a loop into smaller loops and running them in parallel. It is most effective in "embarrassingly parallel" computations, such as vector or matrix operations, where each iteration of the loop is completely independent of every other iteration. For example, if we are summing up two vectors of 1000 elements each, and we have 10 threads, we could split the summation into 10 blocks of 100 elements each, and run all the blocks in parallel, potentially increasing performance by up to a factor of 10.
 
@@ -1125,12 +1174,12 @@ A sample output of a successful run of the automated tests is as follows:
 
 ```none
 BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library
-(c) 2022 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
+(c) 2023 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
 GitHub: https://github.com/bshoshany/thread-pool
 
-Thread pool library version is v3.3.0 (2022-08-03).
-Hardware concurrency is 24.
-Generating log file: BS_thread_pool_test-2022-08-03_12.32.04.log.
+Thread pool library version is v3.4.0 (2023-05-12).
+Hardware concurrency is 32.
+Generating log file: BS_thread_pool_test-2023-05-12_12.48.13.log.
 
 Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!
 
@@ -1138,21 +1187,21 @@ Important: Please do not run any other applications, especially multithreaded ap
 Checking that the constructor works:
 ====================================
 Checking that the thread pool reports a number of threads equal to the hardware concurrency...
-Expected: 24, obtained: 24 -> PASSED!
+Expected: 32, obtained: 32 -> PASSED!
 Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...
-Expected: 24, obtained: 24 -> PASSED!
+Expected: 32, obtained: 32 -> PASSED!
 
 ============================
 Checking that reset() works:
 ============================
 Checking that after reset() the thread pool reports a number of threads equal to half the hardware concurrency...
-Expected: 12, obtained: 12 -> PASSED!
+Expected: 16, obtained: 16 -> PASSED!
 Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...
-Expected: 12, obtained: 12 -> PASSED!
+Expected: 16, obtained: 16 -> PASSED!
 Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...
-Expected: 24, obtained: 24 -> PASSED!
+Expected: 32, obtained: 32 -> PASSED!
 Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...
-Expected: 24, obtained: 24 -> PASSED!
+Expected: 32, obtained: 32 -> PASSED!
 
 ================================
 Checking that push_task() works:
@@ -1217,82 +1266,95 @@ Checking that wait_for_tasks() works...
 =======================================
 Waiting for tasks...
 -> PASSED!
+Checking for deadlocks when waiting for tasks...
+All waiting tasks successfully finished!
+-> PASSED!
+Checking that wait_for_tasks_duration() works...
+Task submitted. Waiting for 10ms...
+-> PASSED!
+Waiting for 500ms...
+-> PASSED!
+Checking that wait_for_tasks_until() works...
+Task submitted. Waiting until 10ms from submission time...
+-> PASSED!
+Waiting until 500ms from submission time...
+-> PASSED!
 
 ======================================================
 Checking that push_loop() and parallelize_loop() work:
 ======================================================
-Verifying that push_loop() from 917499 to 884861 with 19 tasks modifies all indices...
+Verifying that push_loop() from 117855 to 168463 with 25 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 235488 to 296304 with 11 tasks modifies all indices...
+Verifying that push_loop() from -788069 to -860364 with 21 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -790296 to -152228 with 21 tasks modifies all indices...
+Verifying that push_loop() from 545486 to 553538 with 15 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from -937055 to -135942 with 10 tasks modifies all indices...
+Verifying that push_loop() from 987439 to 166022 with 29 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 372276 to 486867 with 3 tasks modifies all indices...
+Verifying that push_loop() from 843125 to 395220 with 19 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 890415 to -163491 with 5 tasks modifies all indices...
+Verifying that push_loop() from 75069 to 552964 with 3 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 637645 to -894687 with 7 tasks modifies all indices...
+Verifying that push_loop() from 986466 to -642521 with 20 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 308032 to -254915 with 20 tasks modifies all indices...
+Verifying that push_loop() from 994906 to -386703 with 7 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 499518 to 104936 with 17 tasks modifies all indices...
+Verifying that push_loop() from -574578 to 327232 with 22 tasks modifies all indices...
 -> PASSED!
-Verifying that push_loop() from 19080 to -378567 with 5 tasks modifies all indices...
+Verifying that push_loop() from 632264 to 644863 with 12 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -298981 to -724834 with 11 tasks modifies all indices...
+Verifying that parallelize_loop() from 450897 to -789636 with 16 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 232695 to 767243 with 3 tasks modifies all indices...
+Verifying that parallelize_loop() from -986029 to -900579 with 24 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 177768 to 966097 with 10 tasks modifies all indices...
+Verifying that parallelize_loop() from -405930 to 299022 with 24 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 474617 to -155690 with 15 tasks modifies all indices...
+Verifying that parallelize_loop() from -545956 to 219212 with 13 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -733576 to 547977 with 9 tasks modifies all indices...
+Verifying that parallelize_loop() from 462224 to 865745 with 26 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -723922 to 992233 with 1 task modifies all indices...
+Verifying that parallelize_loop() from -311718 to 644762 with 28 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 957397 to 364478 with 5 tasks modifies all indices...
+Verifying that parallelize_loop() from -615396 to -267130 with 2 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 776948 to 895847 with 3 tasks modifies all indices...
+Verifying that parallelize_loop() from -510089 to 363393 with 26 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 696779 to 400637 with 17 tasks modifies all indices...
+Verifying that parallelize_loop() from -846318 to -18573 with 11 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -5265 to 746418 with 23 tasks modifies all indices...
+Verifying that parallelize_loop() from -680422 to -342474 with 23 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from -229724 to -883103 with 9 tasks correctly sums all indices...
-Expected: -727098445812, obtained: -727098445812 -> PASSED!
-Verifying that parallelize_loop() from 730130 to -370499 with 3 tasks correctly sums all indices...
-Expected: 395819207270, obtained: 395819207270 -> PASSED!
-Verifying that parallelize_loop() from -493633 to 957239 with 14 tasks correctly sums all indices...
-Expected: 672631513560, obtained: 672631513560 -> PASSED!
-Verifying that parallelize_loop() from -455240 to -60850 with 14 tasks correctly sums all indices...
-Expected: -203541129490, obtained: -203541129490 -> PASSED!
-Verifying that parallelize_loop() from -287333 to 298991 with 9 tasks correctly sums all indices...
-Expected: 6834778868, obtained: 6834778868 -> PASSED!
-Verifying that parallelize_loop() from 62326 to -392718 with 18 tasks correctly sums all indices...
-Expected: -150343352292, obtained: -150343352292 -> PASSED!
-Verifying that parallelize_loop() from 663186 to 380865 with 23 tasks correctly sums all indices...
-Expected: 294757240050, obtained: 294757240050 -> PASSED!
-Verifying that parallelize_loop() from 609125 to -43020 with 1 task correctly sums all indices...
-Expected: 369181893080, obtained: 369181893080 -> PASSED!
-Verifying that parallelize_loop() from 465469 to 112037 with 4 tasks correctly sums all indices...
-Expected: 204108747160, obtained: 204108747160 -> PASSED!
-Verifying that parallelize_loop() from 690574 to 113023 with 15 tasks correctly sums all indices...
-Expected: 464117673396, obtained: 464117673396 -> PASSED!
+Verifying that parallelize_loop() from 383147 to -130987 with 10 tasks correctly sums all indices...
+Expected: 129643515306, obtained: 129643515306 -> PASSED!
+Verifying that parallelize_loop() from 827793 to 219417 with 18 tasks correctly sums all indices...
+Expected: 637096822584, obtained: 637096822584 -> PASSED!
+Verifying that parallelize_loop() from -441740 to -531834 with 12 tasks correctly sums all indices...
+Expected: -87713266050, obtained: -87713266050 -> PASSED!
+Verifying that parallelize_loop() from 980942 to 18492 with 2 tasks correctly sums all indices...
+Expected: 961904290850, obtained: 961904290850 -> PASSED!
+Verifying that parallelize_loop() from 351318 to 433401 with 8 tasks correctly sums all indices...
+Expected: 64412007594, obtained: 64412007594 -> PASSED!
+Verifying that parallelize_loop() from 184385 to 382813 with 30 tasks correctly sums all indices...
+Expected: 112547766316, obtained: 112547766316 -> PASSED!
+Verifying that parallelize_loop() from -498480 to 323830 with 10 tasks correctly sums all indices...
+Expected: -143617263810, obtained: -143617263810 -> PASSED!
+Verifying that parallelize_loop() from -119493 to 109088 with 25 tasks correctly sums all indices...
+Expected: -2378613886, obtained: -2378613886 -> PASSED!
+Verifying that parallelize_loop() from 776258 to 340877 with 6 tasks correctly sums all indices...
+Expected: 486378918054, obtained: 486378918054 -> PASSED!
+Verifying that parallelize_loop() from 160863 to 750589 with 3 tasks correctly sums all indices...
+Expected: 537506352426, obtained: 537506352426 -> PASSED!
 Verifying that parallelize_loop() with identical start and end indices does nothing...
 -> PASSED!
 Trying parallelize_loop() with start and end indices of different types:
-Verifying that parallelize_loop() from 894645 to 908567 with 9 tasks modifies all indices...
+Verifying that parallelize_loop() from 838162 to 345683 with 13 tasks modifies all indices...
 -> PASSED!
 Trying the overloads for push_loop() and parallelize_loop() for the case where the first index is equal to 0:
-Verifying that push_loop() from 0 to 949967 with 10 tasks modifies all indices...
+Verifying that push_loop() from 0 to 15216 with 30 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 0 to 241018 with 3 tasks modifies all indices...
+Verifying that parallelize_loop() from 0 to 239084 with 5 tasks modifies all indices...
 -> PASSED!
-Verifying that parallelize_loop() from 0 to 574984 with 19 tasks correctly sums all indices...
-Expected: 330606025272, obtained: 330606025272 -> PASSED!
+Verifying that parallelize_loop() from 0 to -824186 with 18 tasks correctly sums all indices...
+Expected: -679283386782, obtained: -679283386782 -> PASSED!
 
 ====================================
 Checking that task monitoring works:
@@ -1301,25 +1363,25 @@ Resetting pool to 4 threads.
 Submitting 12 tasks.
 After submission, should have: 12 tasks total, 4 tasks running, 8 tasks queued...
 Result: 12 tasks total, 4 tasks running, 8 tasks queued -> PASSED!
+Task 3 released.
+Task 1 released.
 Task 2 released.
 Task 0 released.
-Task 1 released.
-Task 3 released.
 After releasing 4 tasks, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
 Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
 Task 4 released.
-Task 7 released.
 Task 6 released.
 Task 5 released.
+Task 7 released.
 After releasing 4 more tasks, should have: 4 tasks total, 4 tasks running, 0 tasks queued...
 Result: 4 tasks total, 4 tasks running, 0 tasks queued -> PASSED!
-Task 11 released.
-Task 10 released.
-Task 9 released.
 Task 8 released.
+Task 11 released.
+Task 9 released.
+Task 10 released.
 After releasing the final 4 tasks, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
 Result: 0 tasks total, 0 tasks running, 0 tasks queued -> PASSED!
-Resetting pool to 24 threads.
+Resetting pool to 32 threads.
 
 ============================
 Checking that pausing works:
@@ -1338,29 +1400,29 @@ Result: 12 tasks total, 0 tasks running, 12 tasks queued -> PASSED!
 Unpausing pool.
 Checking that the pool correctly reports that it is not paused.
 -> PASSED!
-Task 1 done.
-Task 2 done.
-Task 0 done.
 Task 3 done.
+Task 2 done.
+Task 1 done.
+Task 0 done.
 300ms later, should have: 8 tasks total, 4 tasks running, 4 tasks queued...
 Result: 8 tasks total, 4 tasks running, 4 tasks queued -> PASSED!
 Pausing pool and using wait_for_tasks() to wait for the running tasks.
-Task 7 done.
-Task 5 done.
 Task 6 done.
 Task 4 done.
+Task 7 done.
+Task 5 done.
 After waiting, should have: 4 tasks total, 0 tasks running, 4 tasks queued...
 Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 200ms later, should still have: 4 tasks total, 0 tasks running, 4 tasks queued...
 Result: 4 tasks total, 0 tasks running, 4 tasks queued -> PASSED!
 Unpausing pool and using wait_for_tasks() to wait for all tasks.
-Task 8 done.
+Task 11 done.
 Task 9 done.
 Task 10 done.
-Task 11 done.
+Task 8 done.
 After waiting, should have: 0 tasks total, 0 tasks running, 0 tasks queued...
 Result: 0 tasks total, 0 tasks running, 0 tasks queued -> PASSED!
-Resetting pool to 24 threads.
+Resetting pool to 32 threads.
 
 =======================================
 Checking that exception handling works:
@@ -1376,68 +1438,68 @@ Throwing exception...
 ============================================================
 Testing that vector operations produce the expected results:
 ============================================================
-Adding two vectors with 77579 elements using 9 tasks...
+Adding two vectors with 365392 elements using 9 tasks...
 -> PASSED!
-Adding two vectors with 925926 elements using 2 tasks...
+Adding two vectors with 797060 elements using 7 tasks...
 -> PASSED!
-Adding two vectors with 367682 elements using 22 tasks...
+Adding two vectors with 159148 elements using 19 tasks...
 -> PASSED!
-Adding two vectors with 28482 elements using 2 tasks...
+Adding two vectors with 432461 elements using 3 tasks...
 -> PASSED!
-Adding two vectors with 486607 elements using 19 tasks...
+Adding two vectors with 907909 elements using 30 tasks...
 -> PASSED!
-Adding two vectors with 688249 elements using 10 tasks...
+Adding two vectors with 854259 elements using 3 tasks...
 -> PASSED!
-Adding two vectors with 473738 elements using 18 tasks...
+Adding two vectors with 238088 elements using 2 tasks...
 -> PASSED!
-Adding two vectors with 743021 elements using 12 tasks...
+Adding two vectors with 559647 elements using 32 tasks...
 -> PASSED!
-Adding two vectors with 209804 elements using 11 tasks...
+Adding two vectors with 473570 elements using 25 tasks...
 -> PASSED!
-Adding two vectors with 635671 elements using 23 tasks...
+Adding two vectors with 124722 elements using 9 tasks...
 -> PASSED!
 
 ++++++++++++++++++++++++++++++
-SUCCESS: Passed all 88 checks!
+SUCCESS: Passed all 93 checks!
 ++++++++++++++++++++++++++++++
 ```
 
 ### Performance tests
 
-If all checks passed, `BS_thread_pool_test.cpp` will perform simple benchmarks by filling a specific number of vectors of fixed size with random values. The program decides how many vectors to use by testing how many are needed to reach a target duration in the single-threaded test. This ensures that the test takes approximately the same amount of time on different systems, and is thus more consistent and portable.
+If all checks passed, `BS_thread_pool_test.cpp` will perform simple benchmarks by filling a specific number of vectors of fixed size with values. The program decides how many vectors to use by testing how many are needed to reach a target duration in the single-threaded test. This ensures that the test takes approximately the same amount of time on different systems, and is thus more consistent and portable.
 
 Once the required number of vectors has been determined, the program will test the performance of several multi-threaded tests, dividing the total number of vectors into different numbers of tasks, compare them to the performance of the single-threaded test, and indicate the maximum speedup obtained.
 
-Please note that these benchmarks are only intended to demonstrate that the package can provide a significant speedup, and it is highly recommended to perform your own benchmarks with your specific system, compiler, and code.
-
-Here we will present the results of the performance test running on a high-end desktop computer equipped with a 12-core / 24-thread AMD Ryzen 9 3900X CPU at 3.8 GHz and 32 GB of DDR4 RAM at 3600 MHz, compiled using [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.32.31332 on Windows 11 build 22000.795 with the `/O2` compiler flag. The output was as follows:
+As an example, here are the results of the benchmarks from a [Digital Research Alliance of Canada](https://alliancecan.ca/en) node equipped with two 20-core / 40-thread Intel Xeon Gold 6148 CPUs (for a total of 40 cores and 80 threads), running CentOS Linux 7.9.2009. The tests were compiled using GCC v12.2.0 with the `-O3` and `-march=native` flags. The output was as follows:
 
 ```none
 ======================
 Performing benchmarks:
 ======================
-Using 24 threads.
+Using 80 threads.
 Each test will be repeated 20 times to collect reliable statistics.
-Determining the number and size of vectors to generate in order to achieve an approximate mean execution time of 50 ms with 24 tasks...
-Generating 3312 vectors with 4096 elements each:
-Single-threaded, mean execution time was  542.2 ms with standard deviation  5.8 ms.
-With    6 tasks, mean execution time was   95.2 ms with standard deviation  1.7 ms.
-With   12 tasks, mean execution time was   49.6 ms with standard deviation  0.7 ms.
-With   24 tasks, mean execution time was   29.0 ms with standard deviation  2.9 ms.
-With   48 tasks, mean execution time was   33.2 ms with standard deviation  4.3 ms.
-With   96 tasks, mean execution time was   35.5 ms with standard deviation  1.9 ms.
-Maximum speedup obtained by multithreading vs. single-threading: 18.7x, using 24 tasks.
+Determining the number and size of vectors to generate in order to achieve an approximate mean execution time of 50 ms with 80 tasks...
+Generating 4000 vectors with 5120 elements each:
+Single-threaded, mean execution time was 2211.9 ms with standard deviation 39.1 ms.
+With   20 tasks, mean execution time was  128.8 ms with standard deviation 12.8 ms.
+With   40 tasks, mean execution time was   71.6 ms with standard deviation  1.1 ms.
+With   80 tasks, mean execution time was   44.4 ms with standard deviation  5.0 ms.
+With  160 tasks, mean execution time was   47.0 ms with standard deviation  6.4 ms.
+With  320 tasks, mean execution time was  132.6 ms with standard deviation  2.2 ms.
+Maximum speedup obtained by multithreading vs. single-threading: 49.8x, using 80 tasks.
 
 +++++++++++++++++++++++++++++++++++++++
 Thread pool performance test completed!
 +++++++++++++++++++++++++++++++++++++++
 ```
 
-This CPU has 12 physical cores, with each core providing two separate logical cores via hyperthreading, for a total of 24 threads. Without hyperthreading, we would expect a maximum theoretical speedup of 12x. With hyperthreading, one might naively expect to achieve up to a 24x speedup, but this is in fact impossible, as both logical cores share the same physical core's resources. However, generally we would expect [an estimated 30% additional speedup](https://software.intel.com/content/www/us/en/develop/articles/how-to-determine-the-effectiveness-of-hyper-threading-technology-with-an-application.html) from hyperthreading, which amounts to around 15.6x in this case. In our performance test, we see a speedup of 18.7x, saturating and even surpassing this estimated theoretical upper bound.
+These two CPUs have 40 physical cores in total, with each core providing two separate logical cores via hyperthreading, for a total of 80 threads. Without hyperthreading, we would expect a maximum theoretical speedup of 40x. With hyperthreading, one might naively expect to achieve up to an 80x speedup, but this is in fact impossible, as each pair of hyperthreaded logical cores share the same physical core's resources. However, generally we would expect at most an estimated 30% additional speedup from hyperthreading, which amounts to around 52x in this case. The speedup of 49.8x in our performance test is very close to this estimate.
+
+In addition, this test demonstrates that splitting the loop into a number of tasks to be equal to the number of hardware threads usually yields optimal results, since all the tasks can be run in parallel. When we used less than 80 tasks, not all of the CPU cores were taken advantage of, and when we used more than 80 tasks, they had to run in more than one batch instead of all at once, introducing additional overhead.
 
 ## The light version of the package
 
-This package started out as a very lightweight thread pool, but over time has expanded to include many additional features and helper classes. Therefore, I have decided to bundle a light version of the thread pool in a separate and stand-alone header file, `BS_thread_pool_light.hpp`, which is about half the size of the full package.
+This package started out as a very lightweight C++ thread pool, but over time has expanded to include many additional features and helper classes. Therefore, I have decided to bundle a light version of the thread pool in a separate and stand-alone header file, `BS_thread_pool_light.hpp`, which is about half the size of the full package.
 
 This file does not contain any of the helper classes, only a new `BS::thread_pool_light` class, which is a minimal thread pool with only the 5 most basic member functions:
 
@@ -1449,7 +1511,9 @@ This file does not contain any of the helper classes, only a new `BS::thread_poo
 
 A separate test program `BS_thread_pool_light_test.cpp` tests only the features of the lightweight `BS::thread_pool_light` class. In the spirit of minimalism, it does not generate a log file and does not do any benchmarks.
 
-To be perfectly clear, each header file is 100% stand-alone. If you wish to use the full package, you only need `BS_thread_pool.hpp`, and if you wish to use the light version, you only need `BS_thread_pool_light.hpp`. Only a single header file needs to be included in your project.
+To be perfectly clear, each header file is 100% stand-alone. If you wish to use the full package, you only need `BS_thread_pool.hpp`, and if you wish to use the light version, you only need `BS_thread_pool_light.hpp`. Only a single header file needs to be included in your project. However, if you wish to use both the light and non-light thread pool classes in the same project, you can include both header files.
+
+If needed, the current version of the light thread pool can be obtained using the macro `BS_THREAD_POOL_LIGHT_VERSION`.
 
 ## About the project
 
@@ -1469,9 +1533,9 @@ If you found this project useful, please consider [starring it on GitHub](https:
 
 ### Copyright and citing
 
-Copyright (c) 2022 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
+Copyright (c) 2023 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
 
-If you use the library in software of any kind, please provide a link to [the GitHub repository](https://github.com/bshoshany/thread-pool) in the source code and documentation.
+If you use this C++ thread pool library in software of any kind, please provide a link to [the GitHub repository](https://github.com/bshoshany/thread-pool) in the source code and documentation.
 
 If you use this library in published research, please cite it as follows:
 

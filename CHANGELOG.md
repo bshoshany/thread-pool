@@ -10,12 +10,13 @@
 
 # `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
-By Barak Shoshany<br />
-Email: [baraksh@gmail.com](mailto:baraksh@gmail.com)<br />
-Website: [https://baraksh.com/](https://baraksh.com/)<br />
-GitHub: [https://github.com/bshoshany](https://github.com/bshoshany)<br />
+By Barak Shoshany\
+Email: <baraksh@gmail.com>\
+Website: <https://baraksh.com/>\
+GitHub: <https://github.com/bshoshany>
 
 * [Version history](#version-history)
+    * [v3.4.0 (2023-05-12)](#v340-2023-05-12)
     * [v3.3.0 (2022-08-03)](#v330-2022-08-03)
     * [v3.2.0 (2022-07-28)](#v320-2022-07-28)
     * [v3.1.0 (2022-07-13)](#v310-2022-07-13)
@@ -33,6 +34,28 @@ GitHub: [https://github.com/bshoshany](https://github.com/bshoshany)<br />
     * [v1.0 (2021-01-15)](#v10-2021-01-15)
 
 ## Version history
+
+### v3.4.0 (2023-05-12)
+
+* `BS_thread_pool.hpp` and `BS_thread_pool_light.hpp`:
+    * Resolved an issue which could have caused `tasks_total` to not be synchronized in some cases. See [#70](https://github.com/bshoshany/thread-pool/pull/70).
+    * Resolved a deadlock which could rarely be caused when the pool was destructed or reset. See [#93](https://github.com/bshoshany/thread-pool/pull/93), [#100](https://github.com/bshoshany/thread-pool/pull/100), [#107](https://github.com/bshoshany/thread-pool/pull/107), and [#108](https://github.com/bshoshany/thread-pool/pull/108).
+    * Resolved a deadlock which could be caused when `wait_for_tasks()` was called more than once.
+    * Two new member functions have been added to the non-light version: `wait_for_tasks_duration()` and `wait_for_tasks_until()`. They allow waiting for the tasks to complete, but with a timeout. `wait_for_tasks_duration()` will stop waiting after the specified duration has passed, and `wait_for_tasks_until()` will stop waiting after the specified time point has been reached.
+    * Renamed `BS_THREAD_POOL_VERSION` in `BS_thread_pool_light.hpp` to `BS_THREAD_POOL_LIGHT_VERSION` and removed the `[light]` tag. This allows including both header files in the same program in case we want to use both the light and non-light thread pools simultaneously.
+* `BS_thread_pool_test.cpp` and `BS_thread_pool_light_test.cpp`:
+    * Fixed an issue that caused a compilation error when using MSVC and including `Windows.h`. See [#72](https://github.com/bshoshany/thread-pool/pull/72).
+    * The number and size of the vectors in the performance test (`BS_thread_pool_test.cpp` only) are now guaranteed to be multiples of the number of threads, for optimal performance.
+    * In `count_unique_threads()`, moved the condition variables and mutexes to the function scope to prevent cluttering the global scope.
+    * Three new tests have been added to `BS_thread_pool_test.cpp` to check the deadlocks issue that were resolved in this release (see above). The tests rely on the new wait for tasks with timeout feature, so they are not available in the light version.
+        * One test checks for deadlocks when calling `wait_for_tasks()` more than once.
+        * Two tests check for deadlocks when destructing and resetting the pool respectively. They are turned off by default, since they take a long time to complete, but can be turned on by setting `enable_long_deadlock_tests` to `true`.
+    * Two new tests have been added to the non-light version to check the new member functions `wait_for_tasks_duration()` and `wait_for_tasks_until()`.
+    * The test programs now return the number of failed tests upon exit, instead of just 1 if any number of tests failed, which was the case in previous versions. Also, if any tests failed, `std::quick_exit()` is invoked instead of `return`, to avoid getting stuck due to any lingering tasks or deadlocks.
+* `README.md`:
+    * Added documentation for the two new member functions, `wait_for_tasks_duration()` and `wait_for_tasks_until()`.
+    * Fixed Markdown rendering incorrectly on Visual Studio. See [#77](https://github.com/bshoshany/thread-pool/pull/77).
+    * The sample performance tests are now taken from a 40-core / 80-thread dual-CPU computing node, which is a more typical use case for high-performance scientific software.
 
 ### v3.3.0 (2022-08-03)
 
