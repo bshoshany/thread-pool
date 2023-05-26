@@ -1,13 +1,3 @@
-[![DOI:10.5281/zenodo.4742687](https://zenodo.org/badge/DOI/10.5281/zenodo.4742687.svg)](https://doi.org/10.5281/zenodo.4742687)
-[![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b.svg)](https://arxiv.org/abs/2105.00613)
-[![License: MIT](https://img.shields.io/github/license/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt)
-![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)
-![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/BS_thread_pool.hpp)
-![GitHub last commit](https://img.shields.io/github/last-commit/bshoshany/thread-pool)
-[![GitHub repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=social)](https://github.com/bshoshany/thread-pool)
-[![Twitter @BarakShoshany](https://img.shields.io/twitter/follow/BarakShoshany?style=social)](https://twitter.com/BarakShoshany)
-[![Open in Visual Studio Code](https://img.shields.io/badge/-Open%20in%20Visual%20Studio%20Code-007acc)](https://vscode.dev/github/bshoshany/thread-pool)
-
 # `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
 By Barak Shoshany\
@@ -16,6 +6,7 @@ Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
 * [Version history](#version-history)
+    * [v3.5.0 (2023-05-25)](#v350-2023-05-25)
     * [v3.4.0 (2023-05-12)](#v340-2023-05-12)
     * [v3.3.0 (2022-08-03)](#v330-2022-08-03)
     * [v3.2.0 (2022-07-28)](#v320-2022-07-28)
@@ -34,6 +25,36 @@ GitHub: <https://github.com/bshoshany>
     * [v1.0 (2021-01-15)](#v10-2021-01-15)
 
 ## Version history
+
+### v3.5.0 (2023-05-25)
+
+* `BS_thread_pool.hpp` and `BS_thread_pool_light.hpp`:
+    * Added a new member function, `purge()`, to the full (non-light) thread pool. This function purges all the tasks waiting in the queue. Tasks that are currently running will not be affected, but any tasks still waiting in the queue will be removed and will never be executed by the threads. Please note that there is no way to restore the purged tasks.
+    * Fix a bug which caused `wait_for_tasks()` to only block the first thread that called it. Now it blocks every thread that calls it, which is the expected behavior. In addition, all related deadlock have now been completely resolved. This also applies to the variants `wait_for_tasks_duration()` and `wait_for_tasks_until()` in the non-light version. See [#110](https://github.com/bshoshany/thread-pool/pull/110).
+        * Note: You should never call `wait_for_tasks()` from within a thread of the same thread pool, as that will cause it to wait forever! This fix is relevant for situations when `wait_for_tasks()` is called from an auxiliary `std::thread` or a separate thread pool.
+    * `push_task()` and `submit()` now avoid creating unnecessary copies of the function object. This should improve performance, especially if large objects are involved. See [#90](https://github.com/bshoshany/thread-pool/pull/90).
+    * Optimized the way condition variables are used by the thread pool class. Shared variables are now modified while owning the mutex, but condition variables are notified after the mutex is released, if possible. See [#84](https://github.com/bshoshany/thread-pool/pull/84).
+    * Instead of a variable `tasks_total` to keep track of the total number of tasks (queued + running), the thread pool class now uses a variable `tasks_running` to keep track only of the number of running tasks, with the number of tasks in the queue obtained via `tasks.size()`. This makes more sense in terms of the internal logic of the class.
+    * All atomic variables have been converted to non-atomic. They are now all governed by `tasks_mutex`, so they do not need to be atomic. This eliminates redundant locking, and may improve performance a bit.
+    * `running` has been renamed to `workers_running` and `task_done_cv` has been renamed to `tasks_done_cv`.
+    * The worker now only notifies thi condition variable `tasks_done_cv` if all the tasks are done, not just a single task. Checking if the tasks are done is cheaper than notifying the condition variable, so since the worker no longer notifies the condition variable every single time it finishes a task, this should improve performance a bit if `wait_for_tasks()` is used.
+* `BS_thread_pool_test.cpp`:
+    * Combined the tests for the full and light versions into one program. The file `BS_thread_pool_light_test.cpp` has been removed.
+    * The tests for the light version are now much more comprehensive. The only features that are not tested in the light version are those that do not exist in it.
+    * Added a test for the new `purge()` member function.
+    * Added a test to ensure that `push_task()` and `submit()` do not create unnecessary copies of the function object.
+    * Added a test to ensure that `push_task()` and `submit()` correctly accept arguments passed by value, reference, and constant reference.
+    * Added a test to ensure that `wait_for_tasks()` blocks all external threads that call it.
+    * `_CRT_SECURE_NO_WARNINGS` is now set only if it has not already been defined, to prevent errors in MSVC projects which already have it set as part of the default build settings. See [#72](https://github.com/bshoshany/thread-pool/pull/72).
+* `README.md`:
+    * Added documentation for the new `purge()` member function.
+    * Added an explanation for how to pass arguments by reference or constant reference when submitting functions to the queue, using the wrappers `std::ref()` and `std::cref()` respectively. See [#83](https://github.com/bshoshany/thread-pool/issues/83).
+    * Added a link to [my lecture notes](https://baraksh.com/CSE701/notes.php) for a course taught at McMaster University, for the benefit of beginner C++ programmers who wish to learn some of the advanced techniques and programming practices used in developing this library.
+    * Removed the sample test results, since the complete log file (including the deadlock tests) is now over 500 lines long.
+* Other:
+    * A `.clang-format` file with the project's formatting conventions is now included in the GitHub repository. The pull request template now asks to format any new code using this file, so that it is consistent with the rest of the library.
+    * A PowerShell script, `BS_thread_pool_test.ps1`, is now provided in the GitHub repository to make running the test on multiple compilers and operating systems easier. Since it is written in PowerShell, it is fully portable and works on Windows, Linux, and macOS. The script will automatically detect if Clang, GCC, and/or MSVC are available, compile the test program using each available compiler, and then run each compiled test program 5 times and report on any errors. The pull request template now recommends using this script for testing.
+    * Since the root folder has become a bit crowded, the header files `BS_thread_pool.hpp` and `BS_thread_pool_light.hpp` have been moved to the `include` subfolder, and the test file `BS_thread_pool_test.cpp` has been moved to the `tests` subfolder, which also contains the new test script `BS_thread_pool_test.ps1`.
 
 ### v3.4.0 (2023-05-12)
 

@@ -1,15 +1,15 @@
 /**
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 3.4.0
- * @date 2023-05-12
+ * @version 3.5.0
+ * @date 2023-05-25
  * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
  */
 
 // Get rid of annoying MSVC warning.
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
@@ -22,6 +22,7 @@
 #include <ctime>              // std::localtime, std::strftime, std::time, std::time_t
 #include <exception>          // std::exception
 #include <fstream>            // std::ofstream
+#include <functional>         // std::cref, std::ref
 #include <future>             // std::future
 #include <iomanip>            // std::setprecision, std::setw
 #include <ios>                // std::fixed
@@ -32,11 +33,13 @@
 #include <stdexcept>          // std::runtime_error
 #include <string>             // std::string, std::to_string
 #include <thread>             // std::this_thread, std::thread
+#include <type_traits>        // std::is_same_v
 #include <utility>            // std::forward, std::pair
 #include <vector>             // std::begin, std::end, std::vector
 
-// Include the header file for the thread pool library.
-#include "BS_thread_pool.hpp"
+// Include the header files for the thread pool library.
+#include "../include/BS_thread_pool.hpp"
+#include "../include/BS_thread_pool_light.hpp"
 
 // ================
 // Global variables
@@ -63,8 +66,9 @@ std::ofstream log_file;
 // A global synced_stream object which prints to the log file.
 BS::synced_stream sync_file(log_file);
 
-// A global thread pool object to be used throughout the test.
-BS::thread_pool pool;
+// Global thread pool objects to be used throughout the test.
+BS::thread_pool pool_full;
+BS::thread_pool_light pool_light;
 
 // A global random_device object to be used to seed some random number generators.
 std::random_device rd;
@@ -178,8 +182,12 @@ void check(const T1 expected, const T2 obtained)
 
 /**
  * @brief Count the number of unique threads in the pool. Submits a number of tasks equal to twice the thread count into the pool. Each task stores the ID of the thread running it, and then waits until released by the main thread. This ensures that each thread in the pool runs at least one task. The number of unique thread IDs is then counted from the stored IDs.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-BS::concurrency_t count_unique_threads()
+template <typename P>
+BS::concurrency_t count_unique_threads(P& pool)
 {
     std::condition_variable ID_cv, total_cv;
     std::mutex ID_mutex, total_mutex;
@@ -203,7 +211,7 @@ BS::concurrency_t count_unique_threads()
                     std::unique_lock<std::mutex> ID_lock_local(ID_mutex);
                     ID_cv.wait(ID_lock_local, [&ID_release] { return ID_release; });
                 });
-        total_cv.wait(total_lock, [&total_count] { return total_count == pool.get_thread_count(); });
+        total_cv.wait(total_lock, [&total_count, &pool] { return total_count == pool.get_thread_count(); });
         {
             const std::scoped_lock ID_lock(ID_mutex);
             ID_release = true;
@@ -218,30 +226,36 @@ BS::concurrency_t count_unique_threads()
 
 /**
  * @brief Check that the constructor works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_constructor()
+template <typename P>
+void check_constructor(P& pool)
 {
     dual_println("Checking that the thread pool reports a number of threads equal to the hardware concurrency...");
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
-    check(pool.get_thread_count(), count_unique_threads());
+    check(pool.get_thread_count(), count_unique_threads(pool));
 }
 
 /**
  * @brief Check that reset() works.
+ *
+ * @param pool The thread pool to check.
  */
-void check_reset()
+void check_reset(BS::thread_pool& pool)
 {
     pool.reset(std::thread::hardware_concurrency() / 2);
     dual_println("Checking that after reset() the thread pool reports a number of threads equal to half the hardware concurrency...");
     check(std::thread::hardware_concurrency() / 2, pool.get_thread_count());
     dual_println("Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
-    check(pool.get_thread_count(), count_unique_threads());
+    check(pool.get_thread_count(), count_unique_threads(pool));
     pool.reset(std::thread::hardware_concurrency());
     dual_println("Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...");
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
     dual_println("Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
-    check(pool.get_thread_count(), count_unique_threads());
+    check(pool.get_thread_count(), count_unique_threads(pool));
 }
 
 // ================================
@@ -294,33 +308,37 @@ void check_deadlock(const F&& task)
     check(passed);
 }
 
-/**
- * @brief Check that the destructor does not create deadlocks.
- */
-void check_destructor_deadlock()
-{
-    dual_println("Checking for destruction deadlocks...");
-    check_deadlock([] { BS::thread_pool temp_pool; });
-}
-
-/**
- * @brief Check that reset() does not create deadlocks.
- */
-void check_reset_deadlock()
-{
-    dual_println("Checking for reset deadlocks...");
-    BS::thread_pool temp_pool;
-    check_deadlock([&temp_pool] { temp_pool.reset(); });
-}
-
 // =======================================
 // Functions to verify submission of tasks
 // =======================================
 
 /**
- * @brief Check that push_task() works.
+ * @brief A class to detect when a copy or move constructor has been invoked.
  */
-void check_push_task()
+class detect_copy_move
+{
+public:
+    detect_copy_move() = default;
+    detect_copy_move(const detect_copy_move&)
+    {
+        copied = true;
+    }
+    detect_copy_move(detect_copy_move&&)
+    {
+        moved = true;
+    }
+    bool copied = false;
+    bool moved = false;
+};
+
+/**
+ * @brief Check that push_task() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_push_task(P& pool)
 {
     dual_println("Checking that push_task() works for a function with no arguments or return value...");
     {
@@ -344,12 +362,60 @@ void check_push_task()
         pool.wait_for_tasks();
         check(flag1 && flag2);
     }
+    dual_println("Checking that push_task() does not create unnecessary copies of the function object...");
+    {
+        bool copied = false;
+        bool moved = false;
+        pool.push_task(
+            [detect = detect_copy_move(), &copied, &moved]
+            {
+                copied = detect.copied;
+                moved = detect.moved;
+            });
+        pool.wait_for_tasks();
+        check(!copied && moved);
+    }
+    dual_println("Checking that push_task() correctly accepts arguments passed by value, reference, and constant reference...");
+    {
+        int64_t pass_me_by_value = 0;
+        pool.push_task(
+            [](int64_t passed_by_value)
+            {
+                if (++passed_by_value)
+                    std::this_thread::yield();
+            },
+            pass_me_by_value);
+        pool.wait_for_tasks();
+        check(pass_me_by_value == 0);
+        int64_t pass_me_by_ref = 0;
+        pool.push_task([](int64_t& passed_by_ref) { ++passed_by_ref; }, std::ref(pass_me_by_ref));
+        pool.wait_for_tasks();
+        check(pass_me_by_ref == 1);
+        int64_t pass_me_by_cref = 0;
+        std::atomic<bool> release = false;
+        pool.push_task(
+            [&release](const int64_t& passed_by_cref)
+            {
+                while (!release)
+                    std::this_thread::yield();
+                check(passed_by_cref == 1);
+            },
+            std::cref(pass_me_by_cref));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++pass_me_by_cref;
+        release = true;
+        pool.wait_for_tasks();
+    }
 }
 
 /**
  * @brief Check that submit() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_submit()
+template <typename P>
+void check_submit(P& pool)
 {
     dual_println("Checking that submit() works for a function with no arguments or return value...");
     {
@@ -406,11 +472,55 @@ void check_submit()
             &flag1, &flag2);
         check(flag_future.get() == 42 && flag1 && flag2);
     }
+    dual_println("Checking that submit() does not create unnecessary copies of the function object...");
+    {
+        std::future<std::pair<bool, bool>> fut = pool.submit([detect = detect_copy_move()] { return std::pair(detect.copied, detect.moved); });
+        std::pair<bool, bool> result = fut.get();
+        check(!result.first && result.second);
+    }
+    dual_println("Checking that submit() correctly accepts arguments passed by value, reference, and constant reference...");
+    {
+        int64_t pass_me_by_value = 0;
+        pool.submit(
+                [](int64_t passed_by_value)
+                {
+                    if (++passed_by_value)
+                        std::this_thread::yield();
+                },
+                pass_me_by_value)
+            .wait();
+        check(pass_me_by_value == 0);
+        int64_t pass_me_by_ref = 0;
+        pool.submit([](int64_t& passed_by_ref) { ++passed_by_ref; }, std::ref(pass_me_by_ref)).wait();
+        check(pass_me_by_ref == 1);
+        int64_t pass_me_by_cref = 0;
+        std::atomic<bool> release = false;
+        std::future<void> fut = pool.submit(
+            [&release](const int64_t& passed_by_cref)
+            {
+                while (!release)
+                    std::this_thread::yield();
+                check(passed_by_cref == 1);
+            },
+            std::cref(pass_me_by_cref));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++pass_me_by_cref;
+        release = true;
+        fut.wait();
+    }
 }
 
+/**
+ * @brief A class to facilitate checking that member functions of different types have been successfully submitted.
+ *
+ * @tparam P The type of the thread pool to check.
+ */
+template <typename P>
 class flag_class
 {
 public:
+    flag_class(P& pool_) : pool(pool_) {}
+
     void set_flag_no_args()
     {
         flag = true;
@@ -433,139 +543,152 @@ public:
         return 42;
     }
 
-    bool get_flag() const
+    [[nodiscard]] bool get_flag() const
     {
         return flag;
     }
 
     void push_test_flag_no_args()
     {
-        pool.push_task(&flag_class::set_flag_no_args, this);
+        pool.push_task(&flag_class<P>::set_flag_no_args, this);
         pool.wait_for_tasks();
         check(get_flag());
     }
 
     void push_test_flag_one_arg()
     {
-        pool.push_task(&flag_class::set_flag_one_arg, this, true);
+        pool.push_task(&flag_class<P>::set_flag_one_arg, this, true);
         pool.wait_for_tasks();
         check(get_flag());
     }
 
     void submit_test_flag_no_args()
     {
-        pool.submit(&flag_class::set_flag_no_args, this).wait();
+        pool.submit(&flag_class<P>::set_flag_no_args, this).wait();
         check(get_flag());
     }
 
     void submit_test_flag_one_arg()
     {
-        pool.submit(&flag_class::set_flag_one_arg, this, true).wait();
+        pool.submit(&flag_class<P>::set_flag_one_arg, this, true).wait();
         check(get_flag());
     }
 
     void submit_test_flag_no_args_return()
     {
-        std::future<int> flag_future = pool.submit(&flag_class::set_flag_no_args_return, this);
+        std::future<int> flag_future = pool.submit(&flag_class<P>::set_flag_no_args_return, this);
         check(flag_future.get() == 42 && get_flag());
     }
 
     void submit_test_flag_one_arg_return()
     {
-        std::future<int> flag_future = pool.submit(&flag_class::set_flag_one_arg_return, this, true);
+        std::future<int> flag_future = pool.submit(&flag_class<P>::set_flag_one_arg_return, this, true);
         check(flag_future.get() == 42 && get_flag());
     }
 
 private:
     bool flag = false;
+    P& pool;
 };
 
 /**
  * @brief Check that submitting member functions works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_member_function()
+template <typename P>
+void check_member_function(P& pool)
 {
     dual_println("Checking that push_task() works for a member function with no arguments or return value...");
     {
-        flag_class flag;
-        pool.push_task(&flag_class::set_flag_no_args, &flag);
+        flag_class<P> flag(pool);
+        pool.push_task(&flag_class<P>::set_flag_no_args, &flag);
         pool.wait_for_tasks();
         check(flag.get_flag());
     }
     dual_println("Checking that push_task() works for a member function with one argument and no return value...");
     {
-        flag_class flag;
-        pool.push_task(&flag_class::set_flag_one_arg, &flag, true);
+        flag_class<P> flag(pool);
+        pool.push_task(&flag_class<P>::set_flag_one_arg, &flag, true);
         pool.wait_for_tasks();
         check(flag.get_flag());
     }
     dual_println("Checking that submit() works for a member function with no arguments or return value...");
     {
-        flag_class flag;
-        pool.submit(&flag_class::set_flag_no_args, &flag).wait();
+        flag_class<P> flag(pool);
+        pool.submit(&flag_class<P>::set_flag_no_args, &flag).wait();
         check(flag.get_flag());
     }
     dual_println("Checking that submit() works for a member function with one argument and no return value...");
     {
-        flag_class flag;
-        pool.submit(&flag_class::set_flag_one_arg, &flag, true).wait();
+        flag_class<P> flag(pool);
+        pool.submit(&flag_class<P>::set_flag_one_arg, &flag, true).wait();
         check(flag.get_flag());
     }
     dual_println("Checking that submit() works for a member function with no arguments and a return value...");
     {
-        flag_class flag;
-        std::future<int> flag_future = pool.submit(&flag_class::set_flag_no_args_return, &flag);
+        flag_class<P> flag(pool);
+        std::future<int> flag_future = pool.submit(&flag_class<P>::set_flag_no_args_return, &flag);
         check(flag_future.get() == 42 && flag.get_flag());
     }
     dual_println("Checking that submit() works for a member function with one argument and a return value...");
     {
-        flag_class flag;
-        std::future<int> flag_future = pool.submit(&flag_class::set_flag_one_arg_return, &flag, true);
+        flag_class<P> flag(pool);
+        std::future<int> flag_future = pool.submit(&flag_class<P>::set_flag_one_arg_return, &flag, true);
         check(flag_future.get() == 42 && flag.get_flag());
     }
 }
 
 /**
  * @brief Check that submitting member functions within an object works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_member_function_within_object()
+template <typename P>
+void check_member_function_within_object(P& pool)
 {
     dual_println("Checking that push_task() works within an object for a member function with no arguments or return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.push_test_flag_no_args();
     }
     dual_println("Checking that push_task() works within an object for a member function with one argument and no return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.push_test_flag_one_arg();
     }
     dual_println("Checking that submit() works within an object for a member function with no arguments or return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.submit_test_flag_no_args();
     }
     dual_println("Checking that submit() works within an object for a member function with one argument and no return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.submit_test_flag_one_arg();
     }
     dual_println("Checking that submit() works within an object for a member function with no arguments and a return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.submit_test_flag_no_args_return();
     }
     dual_println("Checking that submit() works within an object for a member function with one argument and a return value...");
     {
-        flag_class flag;
+        flag_class<P> flag(pool);
         flag.submit_test_flag_one_arg_return();
     }
 }
 
 /**
  * @brief Check that wait_for_tasks() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_wait_for_tasks()
+template <typename P>
+void check_wait_for_tasks(P& pool)
 {
     const BS::concurrency_t n = pool.get_thread_count() * 10;
     std::unique_ptr<std::atomic<bool>[]> flags = std::make_unique<std::atomic<bool>[]>(n);
@@ -585,12 +708,60 @@ void check_wait_for_tasks()
 }
 
 /**
- * @brief Check that calling wait_for_tasks() more than once doesn't create a deadlock. Uses a mechanism similar to check_deadlock().
+ * @brief Check that wait_for_tasks() correctly blocks all external threads that call it.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
+template <typename P>
+void check_wait_for_tasks_blocks(P& pool)
+{
+    pool.wait_for_tasks();
+    dual_println("Checking that wait_for_tasks() correctly blocks all external threads that call it...");
+    std::atomic<bool> release = false;
+    pool.push_task(
+        [&release]
+        {
+            dual_println("Task submitted to pool 1 and waiting to be released...");
+            while (!release)
+                std::this_thread::yield();
+            dual_println("Task released.");
+        });
+    constexpr BS::concurrency_t num_waiting_tasks = 4;
+    P temp_pool(num_waiting_tasks);
+    std::unique_ptr<std::atomic<bool>[]> flags = std::make_unique<std::atomic<bool>[]>(num_waiting_tasks);
+    auto waiting_task = [&flags, &pool](const BS::concurrency_t i)
+    {
+        dual_println("Task ", i, " submitted to pool 2 and waiting for pool 1's task to finish...");
+        pool.wait_for_tasks();
+        dual_println("Task ", i, " finished waiting.");
+        flags[i] = true;
+    };
+    for (BS::concurrency_t i = 0; i < num_waiting_tasks; ++i)
+        temp_pool.push_task(waiting_task, i);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    bool any_flag_set = false;
+    for (BS::concurrency_t i = 0; i < num_waiting_tasks; ++i)
+        any_flag_set = any_flag_set || flags[i];
+    check(!any_flag_set);
+    release = true;
+    temp_pool.wait_for_tasks();
+    bool all_flags_set = true;
+    for (size_t i = 0; i < num_waiting_tasks; ++i)
+        all_flags_set = all_flags_set && flags[i];
+    check(all_flags_set);
+}
+
+/**
+ * @brief Check that calling wait_for_tasks() more than once doesn't create a deadlock. Uses a mechanism similar to check_deadlock().
+ *
+ * @tparam P The type of the thread pool to check.
+ */
+template <typename P>
 void check_wait_for_tasks_deadlock()
 {
     dual_println("Checking for deadlocks when waiting for tasks...");
-    BS::thread_pool temp_pool(1);
+    P temp_pool(1);
     temp_pool.push_task([] { std::this_thread::sleep_for(std::chrono::milliseconds(500)); });
     constexpr uint32_t n_waiting_tasks = 1000;
     std::atomic<uint32_t> count = 0;
@@ -630,8 +801,10 @@ void check_wait_for_tasks_deadlock()
 
 /**
  * @brief Check that wait_for_tasks_duration() works.
+ *
+ * @param pool The thread pool to check.
  */
-void check_wait_for_tasks_duration()
+void check_wait_for_tasks_duration(BS::thread_pool& pool)
 {
     dual_println("Checking that wait_for_tasks_duration() works...");
     pool.reset();
@@ -652,8 +825,10 @@ void check_wait_for_tasks_duration()
 
 /**
  * @brief Check that wait_for_tasks_until() works.
+ *
+ * @param pool The thread pool to check.
  */
-void check_wait_for_tasks_until()
+void check_wait_for_tasks_until(BS::thread_pool& pool)
 {
     dual_println("Checking that wait_for_tasks_until() works...");
     pool.reset();
@@ -680,13 +855,16 @@ void check_wait_for_tasks_until()
 /**
  * @brief Check that push_loop() or parallelize_loop() work for a specific range of indices split over a specific number of tasks, with no return value.
  *
+ * @tparam P The type of the thread pool to check.
+ * @tparam T The type of the last index in the loop plus 1.
+ * @param pool The thread pool to check.
  * @param random_start The first index in the loop.
  * @param random_end The last index in the loop plus 1.
  * @param num_tasks The number of tasks.
  * @param use_push Whether to check push_loop() instead of parallelize_loop().
  */
-template <typename T>
-void check_parallelize_loop_no_return(const int64_t random_start, T random_end, const BS::concurrency_t num_tasks, const bool use_push = false)
+template <typename P, typename T>
+void check_parallelize_loop_no_return(P& pool, const int64_t random_start, T random_end, const BS::concurrency_t num_tasks, const bool use_push = false)
 {
     if (random_start == random_end)
         ++random_end;
@@ -707,7 +885,7 @@ void check_parallelize_loop_no_return(const int64_t random_start, T random_end, 
             pool.push_loop(random_start, random_end, loop, num_tasks);
         pool.wait_for_tasks();
     }
-    else
+    else if constexpr (std::is_same_v<P, BS::thread_pool>)
     {
         if (random_start == 0)
             pool.parallelize_loop(random_end, loop, num_tasks).wait();
@@ -723,11 +901,12 @@ void check_parallelize_loop_no_return(const int64_t random_start, T random_end, 
 /**
  * @brief Check that parallelize_loop() works for a specific range of indices split over a specific number of tasks, with a return value.
  *
+ * @param pool The thread pool to check.
  * @param random_start The first index in the loop.
  * @param random_end The last index in the loop plus 1.
  * @param num_tasks The number of tasks.
  */
-void check_parallelize_loop_return(const int64_t random_start, int64_t random_end, const BS::concurrency_t num_tasks)
+void check_parallelize_loop_return(BS::thread_pool& pool, const int64_t random_start, int64_t random_end, const BS::concurrency_t num_tasks)
 {
     if (random_start == random_end)
         ++random_end;
@@ -748,32 +927,50 @@ void check_parallelize_loop_return(const int64_t random_start, int64_t random_en
 
 /**
  * @brief Check that push_loop() and parallelize_loop() work using several different random values for the range of indices and number of tasks.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_push_loop()
+template <typename P>
+void check_loop(P& pool)
 {
     std::mt19937_64 mt(rd());
     std::uniform_int_distribution<int64_t> index_dist(-1000000, 1000000);
     std::uniform_int_distribution<BS::concurrency_t> task_dist(1, pool.get_thread_count());
     constexpr uint64_t n = 10;
+    if constexpr (std::is_same_v<P, BS::thread_pool>)
+    {
+        for (uint64_t i = 0; i < n; ++i)
+            check_parallelize_loop_no_return(pool, index_dist(mt), index_dist(mt), task_dist(mt));
+        for (uint64_t i = 0; i < n; ++i)
+            check_parallelize_loop_return(pool, index_dist(mt), index_dist(mt), task_dist(mt));
+        dual_println("Verifying that parallelize_loop() with identical start and end indices does nothing...");
+        bool flag = true;
+        const int64_t index = index_dist(mt);
+        pool.parallelize_loop(index, index, [&flag](const int64_t, const int64_t) { flag = false; }).wait();
+        check(flag);
+        dual_println("Trying parallelize_loop() with start and end indices of different types:");
+        const int64_t start = index_dist(mt);
+        const uint32_t end = static_cast<uint32_t>(std::abs(index_dist(mt)));
+        check_parallelize_loop_no_return(pool, start, end, task_dist(mt));
+        dual_println("Trying the overload of parallelize_loop() for the case where the first index is equal to 0:");
+        check_parallelize_loop_no_return(pool, 0, index_dist(mt), task_dist(mt));
+        check_parallelize_loop_return(pool, 0, index_dist(mt), task_dist(mt));
+    }
     for (uint64_t i = 0; i < n; ++i)
-        check_parallelize_loop_no_return(index_dist(mt), index_dist(mt), task_dist(mt), true);
-    for (uint64_t i = 0; i < n; ++i)
-        check_parallelize_loop_no_return(index_dist(mt), index_dist(mt), task_dist(mt));
-    for (uint64_t i = 0; i < n; ++i)
-        check_parallelize_loop_return(index_dist(mt), index_dist(mt), task_dist(mt));
-    dual_println("Verifying that parallelize_loop() with identical start and end indices does nothing...");
+        check_parallelize_loop_no_return(pool, index_dist(mt), index_dist(mt), task_dist(mt), true);
+    dual_println("Verifying that push_loop() with identical start and end indices does nothing...");
     bool flag = true;
     const int64_t index = index_dist(mt);
-    pool.parallelize_loop(index, index, [&flag](const int64_t, const int64_t) { flag = false; }).wait();
+    pool.push_loop(index, index, [&flag](const int64_t, const int64_t) { flag = false; });
+    pool.wait_for_tasks();
     check(flag);
-    dual_println("Trying parallelize_loop() with start and end indices of different types:");
+    dual_println("Trying push_loop() with start and end indices of different types:");
     const int64_t start = index_dist(mt);
     const uint32_t end = static_cast<uint32_t>(std::abs(index_dist(mt)));
-    check_parallelize_loop_no_return(start, end, task_dist(mt));
-    dual_println("Trying the overloads for push_loop() and parallelize_loop() for the case where the first index is equal to 0:");
-    check_parallelize_loop_no_return(0, index_dist(mt), task_dist(mt), true);
-    check_parallelize_loop_no_return(0, index_dist(mt), task_dist(mt));
-    check_parallelize_loop_return(0, index_dist(mt), task_dist(mt));
+    check_parallelize_loop_no_return(pool, start, end, task_dist(mt), true);
+    dual_println("Trying the overload of push_loop() for the case where the first index is equal to 0:");
+    check_parallelize_loop_no_return(pool, 0, index_dist(mt), task_dist(mt), true);
 }
 
 // ===============================================
@@ -782,8 +979,10 @@ void check_push_loop()
 
 /**
  * @brief Check that task monitoring works.
+ *
+ * @param pool The thread pool to check.
  */
-void check_task_monitoring()
+void check_task_monitoring(BS::thread_pool& pool)
 {
     BS::concurrency_t n = std::min<BS::concurrency_t>(std::thread::hardware_concurrency(), 4);
     dual_println("Resetting pool to ", n, " threads.");
@@ -832,8 +1031,10 @@ void check_task_monitoring()
 
 /**
  * @brief Check that pausing works.
+ *
+ * @param pool The thread pool to check.
  */
-void check_pausing()
+void check_pausing(BS::thread_pool& pool)
 {
     BS::concurrency_t n = std::min<BS::concurrency_t>(std::thread::hardware_concurrency(), 4);
     dual_println("Resetting pool to ", n, " threads.");
@@ -894,14 +1095,53 @@ void check_pausing()
     pool.reset(std::thread::hardware_concurrency());
 }
 
+/**
+ * @brief Check that purge() works.
+ *
+ * @param pool The thread pool to check.
+ */
+void check_purge(BS::thread_pool& pool)
+{
+    dual_println("Resetting pool to 1 thread.");
+    pool.reset(1);
+    constexpr size_t num_tasks = 10;
+    dual_println("Submitting ", num_tasks, " tasks to the pool.");
+    std::unique_ptr<std::atomic<bool>[]> done = std::make_unique<std::atomic<bool>[]>(num_tasks);
+    for (size_t i = 0; i < num_tasks; ++i)
+        pool.push_task(
+            [&done, i]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                dual_println("Task ", i, " done.");
+                done[i] = true;
+            });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    dual_println("Purging the pool and waiting for tasks...");
+    pool.purge();
+    pool.wait_for_tasks();
+    dual_println("Checking that only the first task was executed...");
+    check(done[0]);
+    bool any_flag_set = false;
+    for (BS::concurrency_t i = 1; i < num_tasks; ++i)
+        any_flag_set = any_flag_set || done[i];
+    check(!any_flag_set);
+
+    dual_println("Resetting pool to ", std::thread::hardware_concurrency(), " threads.");
+    pool.reset(std::thread::hardware_concurrency());
+}
+
 // ======================================
 // Functions to verify exception handling
 // ======================================
 
 /**
- * @brief Check that exception handling works.
+ * @brief Check that exceptions are forwarded correctly by submit().
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_exceptions()
+template <typename P>
+void check_exceptions_submit(P& pool)
 {
     dual_println("Checking that exceptions are forwarded correctly by submit()...");
     bool caught = false;
@@ -921,15 +1161,28 @@ void check_exceptions()
             caught = true;
     }
     check(caught);
+}
 
+/**
+ * @brief Check that exceptions are forwarded correctly by BS::multi_future.
+ *
+ * @param pool The thread pool to check.
+ */
+void check_exceptions_multi_future(BS::thread_pool& pool)
+{
     dual_println("Checking that exceptions are forwarded correctly by BS::multi_future...");
-    caught = false;
-    BS::multi_future<void> my_future2;
-    my_future2.push_back(pool.submit(throws));
-    my_future2.push_back(pool.submit(throws));
+    bool caught = false;
+    auto throws = []
+    {
+        dual_println("Throwing exception...");
+        throw std::runtime_error("Exception thrown!");
+    };
+    BS::multi_future<void> my_future;
+    my_future.push_back(pool.submit(throws));
+    my_future.push_back(pool.submit(throws));
     try
     {
-        void(my_future2.get());
+        void(my_future.get());
     }
     catch (const std::exception& e)
     {
@@ -945,8 +1198,14 @@ void check_exceptions()
 
 /**
  * @brief Check that parallelized vector operations work as expected by calculating the sum of two randomized vectors of a specific size in two ways, single-threaded and multithreaded, and comparing the results.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ * @param vector_size The size of the vectors.
+ * @param num_tasks The number of tasks to split the calculation into.
  */
-void check_vector_of_size(const size_t vector_size, const BS::concurrency_t num_tasks)
+template <typename P>
+void check_vector_of_size(P& pool, const size_t vector_size, const BS::concurrency_t num_tasks)
 {
     std::vector<int64_t> vector_1(vector_size);
     std::vector<int64_t> vector_2(vector_size);
@@ -962,15 +1221,15 @@ void check_vector_of_size(const size_t vector_size, const BS::concurrency_t num_
     for (size_t i = 0; i < vector_size; ++i)
         sum_single[i] = vector_1[i] + vector_2[i];
     std::vector<int64_t> sum_multi(vector_size);
-    pool.parallelize_loop(
-            0, vector_size,
-            [&sum_multi, &vector_1, &vector_2](const size_t start, const size_t end)
-            {
-                for (size_t i = start; i < end; ++i)
-                    sum_multi[i] = vector_1[i] + vector_2[i];
-            },
-            num_tasks)
-        .wait();
+    pool.push_loop(
+        0, vector_size,
+        [&sum_multi, &vector_1, &vector_2](const size_t start, const size_t end)
+        {
+            for (size_t i = start; i < end; ++i)
+                sum_multi[i] = vector_1[i] + vector_2[i];
+        },
+        num_tasks);
+    pool.wait_for_tasks();
     bool vectors_equal = true;
     for (size_t i = 0; i < vector_size; ++i)
         vectors_equal = vectors_equal && (sum_single[i] == sum_multi[i]);
@@ -979,15 +1238,18 @@ void check_vector_of_size(const size_t vector_size, const BS::concurrency_t num_
 
 /**
  * @brief Check that parallelized vector operations work as expected by calculating the sum of two randomized vectors in two ways, single-threaded and multithreaded, and comparing the results.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
  */
-void check_vectors()
+template <typename P>
+void check_vectors(P& pool)
 {
-    pool.reset();
     std::mt19937_64 mt(rd());
     std::uniform_int_distribution<size_t> size_dist(0, 1000000);
     std::uniform_int_distribution<BS::concurrency_t> task_dist(1, pool.get_thread_count());
     for (size_t i = 0; i < 10; ++i)
-        check_vector_of_size(size_dist(mt), task_dist(mt));
+        check_vector_of_size(pool, size_dist(mt), task_dist(mt));
 }
 
 // ==================
@@ -999,44 +1261,81 @@ void check_vectors()
  */
 void do_tests()
 {
-    print_header("Checking that the constructor works:");
-    check_constructor();
+    print_header("Checking that the constructor works in the full thread pool:");
+    check_constructor(pool_full);
+    print_header("Checking that the constructor works in the light thread pool:");
+    check_constructor(pool_light);
 
-    print_header("Checking that reset() works:");
-    check_reset();
+    print_header("Checking that reset() works in the full thread pool:");
+    check_reset(pool_full);
 
-    print_header("Checking that push_task() works:");
-    check_push_task();
+    print_header("Checking that push_task() works in the full thread pool:");
+    check_push_task(pool_full);
+    print_header("Checking that push_task() works in the light thread pool:");
+    check_push_task(pool_light);
 
-    print_header("Checking that submit() works:");
-    check_submit();
+    print_header("Checking that submit() works in the full thread pool:");
+    check_submit(pool_full);
+    print_header("Checking that submit() works in the light thread pool:");
+    check_submit(pool_light);
 
-    print_header("Checking that submitting member functions works:");
-    check_member_function();
+    print_header("Checking that submitting member functions works in the full thread pool:");
+    check_member_function(pool_full);
+    print_header("Checking that submitting member functions works in the light thread pool:");
+    check_member_function(pool_light);
 
-    print_header("Checking that submitting member functions from within an object works:");
-    check_member_function_within_object();
+    print_header("Checking that submitting member functions from within an object works in the full thread pool:");
+    check_member_function_within_object(pool_full);
+    print_header("Checking that submitting member functions from within an object works in the light thread pool:");
+    check_member_function_within_object(pool_light);
 
-    print_header("Checking that wait_for_tasks() works...");
-    check_wait_for_tasks();
-    check_wait_for_tasks_deadlock();
-    check_wait_for_tasks_duration();
-    check_wait_for_tasks_until();
+    print_header("Checking that wait_for_tasks() works in the full thread pool...");
+    check_wait_for_tasks(pool_full);
+    check_wait_for_tasks_blocks(pool_full);
+    check_wait_for_tasks_deadlock<BS::thread_pool>();
+    check_wait_for_tasks_duration(pool_full);
+    check_wait_for_tasks_until(pool_full);
+    print_header("Checking that wait_for_tasks() works in the light thread pool...");
+    check_wait_for_tasks(pool_light);
+    check_wait_for_tasks_blocks(pool_full);
+    check_wait_for_tasks_deadlock<BS::thread_pool_light>();
 
-    print_header("Checking that push_loop() and parallelize_loop() work:");
-    check_push_loop();
+    print_header("Checking that push_loop() and parallelize_loop() work in the full thread pool:");
+    check_loop(pool_full);
+    print_header("Checking that push_loop() works in the light thread pool:");
+    check_loop(pool_light);
 
-    print_header("Checking that task monitoring works:");
-    check_task_monitoring();
+    print_header("Checking that task monitoring works in the full thread pool:");
+    check_task_monitoring(pool_full);
 
-    print_header("Checking that pausing works:");
-    check_pausing();
+    print_header("Checking that pausing works in the full thread pool:");
+    check_pausing(pool_full);
 
-    print_header("Checking that exception handling works:");
-    check_exceptions();
+    print_header("Checking that purge() works in the full thread pool:");
+    check_purge(pool_full);
 
-    print_header("Testing that vector operations produce the expected results:");
-    check_vectors();
+    print_header("Checking that exception handling works in the full thread pool:");
+    check_exceptions_submit(pool_full);
+    check_exceptions_multi_future(pool_full);
+    print_header("Checking that exception handling works in the light thread pool:");
+    check_exceptions_submit(pool_light);
+
+    print_header("Testing that vector operations produce the expected results in the full thread pool:");
+    check_vectors(pool_full);
+    print_header("Testing that vector operations produce the expected results in the light thread pool:");
+    check_vectors(pool_light);
+
+    if (enable_long_deadlock_tests)
+    {
+        print_header("Checking for deadlocks:");
+        dual_println("Checking for destruction deadlocks in the full thread pool...");
+        check_deadlock([] { BS::thread_pool temp_pool; });
+        dual_println("Checking for destruction deadlocks in the light thread pool...");
+        check_deadlock([] { BS::thread_pool_light temp_pool; });
+        dual_println("Checking for reset deadlocks in the full thread pool...");
+        BS::thread_pool temp_pool;
+        check_deadlock([&temp_pool] { temp_pool.reset(); });
+    }
 }
 
 // ==========================
@@ -1108,8 +1407,8 @@ double generate_element(const size_t i, const size_t j)
  */
 void check_performance()
 {
-    // Reset the pool to ensure that we have a fresh start.
-    pool.reset();
+    // Create a new pool to ensure that we have a fresh start. We use the light version here since we don't need any of the advanced features of the full version.
+    BS::thread_pool_light pool;
 
     // Set the formatting of floating point numbers.
     dual_print(std::fixed, std::setprecision(1));
@@ -1205,6 +1504,7 @@ int main()
     dual_println("GitHub: https://github.com/bshoshany/thread-pool\n");
 
     dual_println("Thread pool library version is ", BS_THREAD_POOL_VERSION, ".");
+    dual_println("Light thread pool library version is ", BS_THREAD_POOL_LIGHT_VERSION, ".");
     dual_println("Hardware concurrency is ", std::thread::hardware_concurrency(), ".");
     if (output_log)
         dual_println("Generating log file: ", log_filename, ".\n");
@@ -1213,13 +1513,6 @@ int main()
 
     if (enable_tests)
         do_tests();
-
-    if (enable_long_deadlock_tests)
-    {
-        print_header("Checking for deadlocks:");
-        check_destructor_deadlock();
-        check_reset_deadlock();
-    }
 
     if (tests_failed == 0)
     {

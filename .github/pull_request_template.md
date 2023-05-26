@@ -6,9 +6,15 @@
 
 What does your pull request fix or add to the library?
 
+**Style**
+
+Have you formatted your code using the `.clang-format` file attached to this project?
+
 **Testing**
 
-Have you tested the new code using the provided automated test program and/or performed any other tests to ensure that it works correctly? If so, please provide information about the test system(s):
+Have you tested the new code using the provided automated test program `BS_thread_pool_test.cpp` (preferably with the provided multi-compiler test script `BS_thread_pool_test.ps1`) and/or performed any other tests to ensure that the new code works correctly?
+
+If so, please provide information about the test system(s):
 
 * CPU model, architecture, # of cores and threads:
 * Operating system:
