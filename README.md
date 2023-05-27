@@ -2,7 +2,7 @@
 [![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b.svg)](https://arxiv.org/abs/2105.00613)
 [![License: MIT](https://img.shields.io/github/license/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt)
 ![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)
-![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/BS_thread_pool.hpp)
+![File size in bytes](https://img.shields.io/github/size/bshoshany/thread-pool/include/BS_thread_pool.hpp)
 ![GitHub last commit](https://img.shields.io/github/last-commit/bshoshany/thread-pool)
 [![GitHub repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=social)](https://github.com/bshoshany/thread-pool)
 [![Open in Visual Studio Code](https://img.shields.io/badge/-Open%20in%20Visual%20Studio%20Code-007acc)](https://vscode.dev/github/bshoshany/thread-pool)
