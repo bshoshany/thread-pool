@@ -13,6 +13,9 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+// #define BS_THREAD_POOL_DISABLE_PAUSE
+// #define BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
+
 #include <algorithm>          // std::min, std::min_element, std::sort, std::unique
 #include <atomic>             // std::atomic
 #include <chrono>             // std::chrono
@@ -409,6 +412,117 @@ void check_push_task(P& pool)
 }
 
 /**
+ * @brief Check that push_task_if_available() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_push_task_if_available(P& pool)
+{
+    dual_println("Checking that push_task_if_available() works for a function with no arguments or return value...");
+    {
+        bool flag = false;
+        pool.push_task_if_available([&flag] { flag = true; });
+        pool.wait_for_tasks();
+        check(flag);
+    }
+    dual_println("Checking that push_task_if_available() works for a function with one argument and no return value...");
+    {
+        bool flag = false;
+        pool.push_task_if_available([](bool* flag_) { *flag_ = true; }, &flag);
+        pool.wait_for_tasks();
+        check(flag);
+    }
+    dual_println("Checking that push_task_if_available() works for a function with two arguments and no return value...");
+    {
+        bool flag1 = false;
+        bool flag2 = false;
+        pool.push_task_if_available([](bool* flag1_, bool* flag2_) { *flag1_ = *flag2_ = true; }, &flag1, &flag2);
+        pool.wait_for_tasks();
+        check(flag1 && flag2);
+    }
+    dual_println("Checking that push_task_if_available() does not create unnecessary copies of the function object...");
+    {
+        bool copied = false;
+        bool moved = false;
+        pool.push_task_if_available(
+            [detect = detect_copy_move(), &copied, &moved]
+            {
+                copied = detect.copied;
+                moved = detect.moved;
+            });
+        pool.wait_for_tasks();
+        check(!copied && moved);
+    }
+    dual_println("Checking that push_task_if_available() correctly accepts arguments passed by value, reference, and constant reference...");
+    {
+        int64_t pass_me_by_value = 0;
+        pool.push_task_if_available(
+            [](int64_t passed_by_value)
+            {
+                if (++passed_by_value)
+                    std::this_thread::yield();
+            },
+            pass_me_by_value);
+        pool.wait_for_tasks();
+        check(pass_me_by_value == 0);
+        int64_t pass_me_by_ref = 0;
+        pool.push_task_if_available([](int64_t& passed_by_ref) { ++passed_by_ref; }, std::ref(pass_me_by_ref));
+        pool.wait_for_tasks();
+        check(pass_me_by_ref == 1);
+        int64_t pass_me_by_cref = 0;
+        std::atomic<bool> release = false;
+        pool.push_task_if_available(
+            [&release](const int64_t& passed_by_cref)
+            {
+                while (!release)
+                    std::this_thread::yield();
+                check(passed_by_cref == 1);
+            },
+            std::cref(pass_me_by_cref));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++pass_me_by_cref;
+        release = true;
+        pool.wait_for_tasks();
+    }
+}
+
+/**
+ * @brief Check that push_task_if_available() doesn't accept more tasks than there are threads.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_push_task_if_available_limit(P& pool)
+{
+    BS::concurrency_t n = pool.get_thread_count();
+    dual_println("Submitting ", n * 2, " tasks, each one waiting for 200ms.");
+    for (BS::concurrency_t i = 0; i < n * 3; ++i)
+    {
+        bool suc = pool.push_task_if_available(
+            [i]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                dual_println("Task ", i, " done.");
+            });
+        dual_println("Return value should be ", i < n);
+        dual_print("Result: ", suc);
+        check(suc == (i < n));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    dual_println("After waiting, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
+}
+
+/**
  * @brief Check that submit() works.
  *
  * @tparam P The type of the thread pool to check.
@@ -511,6 +625,142 @@ void check_submit(P& pool)
 }
 
 /**
+ * @brief Check that submit_if_available() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_submit_if_available(P& pool)
+{
+    dual_println("Checking that submit_if_available() works for a function with no arguments or return value...");
+    {
+        bool flag = false;
+        pool.submit_if_available([&flag] { flag = true; }).first.wait();
+        check(flag);
+    }
+    dual_println("Checking that submit_if_available() works for a function with one argument and no return value...");
+    {
+        bool flag = false;
+        pool.submit_if_available([](bool* flag_) { *flag_ = true; }, &flag).first.wait();
+        check(flag);
+    }
+    dual_println("Checking that submit_if_available() works for a function with two arguments and no return value...");
+    {
+        bool flag1 = false;
+        bool flag2 = false;
+        pool.submit_if_available([](bool* flag1_, bool* flag2_) { *flag1_ = *flag2_ = true; }, &flag1, &flag2).first.wait();
+        check(flag1 && flag2);
+    }
+    dual_println("Checking that submit_if_available() works for a function with no arguments and a return value...");
+    {
+        bool flag = false;
+        std::future<int> flag_future = pool.submit_if_available(
+            [&flag]
+            {
+                flag = true;
+                return 42;
+            }).first;
+        check(flag_future.get() == 42 && flag);
+    }
+    dual_println("Checking that submit_if_available() works for a function with one argument and a return value...");
+    {
+        bool flag = false;
+        std::future<int> flag_future = pool.submit_if_available(
+            [](bool* flag_)
+            {
+                *flag_ = true;
+                return 42;
+            },
+            &flag).first;
+        check(flag_future.get() == 42 && flag);
+    }
+    dual_println("Checking that submit_if_available() works for a function with two arguments and a return value...");
+    {
+        bool flag1 = false;
+        bool flag2 = false;
+        std::future<int> flag_future = pool.submit_if_available(
+            [](bool* flag1_, bool* flag2_)
+            {
+                *flag1_ = *flag2_ = true;
+                return 42;
+            },
+            &flag1, &flag2).first;
+        check(flag_future.get() == 42 && flag1 && flag2);
+    }
+    dual_println("Checking that submit_if_available() does not create unnecessary copies of the function object...");
+    {
+        std::future<std::pair<bool, bool>> fut = pool.submit_if_available([detect = detect_copy_move()] { return std::pair(detect.copied, detect.moved); }).first;
+        std::pair<bool, bool> result = fut.get();
+        check(!result.first && result.second);
+    }
+    dual_println("Checking that submit_if_available() correctly accepts arguments passed by value, reference, and constant reference...");
+    {
+        int64_t pass_me_by_value = 0;
+        pool.submit_if_available(
+                [](int64_t passed_by_value)
+                {
+                    if (++passed_by_value)
+                        std::this_thread::yield();
+                },
+                pass_me_by_value)
+            .first.wait();
+        check(pass_me_by_value == 0);
+        int64_t pass_me_by_ref = 0;
+        pool.submit_if_available([](int64_t& passed_by_ref) { ++passed_by_ref; }, std::ref(pass_me_by_ref)).first.wait();
+        check(pass_me_by_ref == 1);
+        int64_t pass_me_by_cref = 0;
+        std::atomic<bool> release = false;
+        std::future<void> fut = pool.submit_if_available(
+            [&release](const int64_t& passed_by_cref)
+            {
+                while (!release)
+                    std::this_thread::yield();
+                check(passed_by_cref == 1);
+            },
+            std::cref(pass_me_by_cref)).first;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++pass_me_by_cref;
+        release = true;
+        fut.wait();
+    }
+}
+
+/**
+ * @brief Check that submit_if_available() doesn't accept more tasks than there are threads.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_submit_if_available_limit(P& pool)
+{
+    BS::concurrency_t n = pool.get_thread_count();
+    dual_println("Submitting ", n * 2, " tasks, each one waiting for 200ms.");
+    for (BS::concurrency_t i = 0; i < n * 3; ++i)
+    {
+        std::pair<std::future<void>, bool> suc = pool.submit_if_available(
+            [i]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                dual_println("Task ", i, " done.");
+            });
+        dual_println("Return value should be ", i < n);
+        dual_print("Result: ", suc.second);
+        check(suc.second == (i < n));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    dual_println("After waiting, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
+}
+
+/**
  * @brief A class to facilitate checking that member functions of different types have been successfully submitted.
  *
  * @tparam P The type of the thread pool to check.
@@ -568,9 +818,21 @@ public:
         check(get_flag());
     }
 
+    void submit_test_flag_no_args_if_available()
+    {
+        pool.submit_if_available(&flag_class<P>::set_flag_no_args, this).first.wait();
+        check(get_flag());
+    }
+
     void submit_test_flag_one_arg()
     {
         pool.submit(&flag_class<P>::set_flag_one_arg, this, true).wait();
+        check(get_flag());
+    }
+
+    void submit_test_flag_one_arg_if_available()
+    {
+        pool.submit_if_available(&flag_class<P>::set_flag_one_arg, this, true).first.wait();
         check(get_flag());
     }
 
@@ -580,9 +842,21 @@ public:
         check(flag_future.get() == 42 && get_flag());
     }
 
+    void submit_test_flag_no_args_return_if_available()
+    {
+        std::future<int> flag_future = pool.submit_if_available(&flag_class<P>::set_flag_no_args_return, this).first;
+        check(flag_future.get() == 42 && get_flag());
+    }
+
     void submit_test_flag_one_arg_return()
     {
         std::future<int> flag_future = pool.submit(&flag_class<P>::set_flag_one_arg_return, this, true);
+        check(flag_future.get() == 42 && get_flag());
+    }
+
+    void submit_test_flag_one_arg_return_if_available()
+    {
+        std::future<int> flag_future = pool.submit_if_available(&flag_class<P>::set_flag_one_arg_return, this, true).first;
         check(flag_future.get() == 42 && get_flag());
     }
 
@@ -641,6 +915,41 @@ void check_member_function(P& pool)
 }
 
 /**
+ * @brief Check that submit_if_available() works with member functions.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_member_function_if_available(P& pool)
+{
+    dual_println("Checking that submit_if_available() works for a member function with no arguments or return value...");
+    {
+        flag_class<P> flag(pool);
+        pool.submit_if_available(&flag_class<P>::set_flag_no_args, &flag).first.wait();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that submit_if_available() works for a member function with one argument and no return value...");
+    {
+        flag_class<P> flag(pool);
+        pool.submit_if_available(&flag_class<P>::set_flag_one_arg, &flag, true).first.wait();
+        check(flag.get_flag());
+    }
+    dual_println("Checking that submit_if_available() works for a member function with no arguments and a return value...");
+    {
+        flag_class<P> flag(pool);
+        std::future<int> flag_future = pool.submit_if_available(&flag_class<P>::set_flag_no_args_return, &flag).first;
+        check(flag_future.get() == 42 && flag.get_flag());
+    }
+    dual_println("Checking that submit_if_available() works for a member function with one argument and a return value...");
+    {
+        flag_class<P> flag(pool);
+        std::future<int> flag_future = pool.submit_if_available(&flag_class<P>::set_flag_one_arg_return, &flag, true).first;
+        check(flag_future.get() == 42 && flag.get_flag());
+    }
+}
+
+/**
  * @brief Check that submitting member functions within an object works.
  *
  * @tparam P The type of the thread pool to check.
@@ -678,6 +987,37 @@ void check_member_function_within_object(P& pool)
     {
         flag_class<P> flag(pool);
         flag.submit_test_flag_one_arg_return();
+    }
+}
+
+/**
+ * @brief Check that submit_if_available() works with member functions..
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_member_function_within_object_if_available(P& pool)
+{
+    dual_println("Checking that submit_if_available() works within an object for a member function with no arguments or return value...");
+    {
+        flag_class<P> flag(pool);
+        flag.submit_test_flag_no_args_if_available();
+    }
+    dual_println("Checking that submit_if_available() works within an object for a member function with one argument and no return value...");
+    {
+        flag_class<P> flag(pool);
+        flag.submit_test_flag_one_arg_if_available();
+    }
+    dual_println("Checking that submit_if_available() works within an object for a member function with no arguments and a return value...");
+    {
+        flag_class<P> flag(pool);
+        flag.submit_test_flag_no_args_return_if_available();
+    }
+    dual_println("Checking that submit_if_available() works within an object for a member function with one argument and a return value...");
+    {
+        flag_class<P> flag(pool);
+        flag.submit_test_flag_one_arg_return_if_available();
     }
 }
 
@@ -1275,21 +1615,33 @@ void do_tests()
     check_push_task(pool_full);
     print_header("Checking that push_task() works in the light thread pool:");
     check_push_task(pool_light);
+    print_header("Checking that push_task_if_available() works in the full thread pool:");
+    check_push_task_if_available(pool_full);
+    print_header("Checking that push_task_if_available() doesn't accept more tasks than there are threads:");
+    check_push_task_if_available_limit(pool_full);
 
     print_header("Checking that submit() works in the full thread pool:");
     check_submit(pool_full);
     print_header("Checking that submit() works in the light thread pool:");
     check_submit(pool_light);
+    print_header("Checking that submit_if_available() works in the full thread pool:");
+    check_submit_if_available(pool_full);
+    print_header("Checking that submit_if_available() doesn't accept more tasks than there are threads:");
+    check_submit_if_available_limit(pool_full);
 
     print_header("Checking that submitting member functions works in the full thread pool:");
     check_member_function(pool_full);
     print_header("Checking that submitting member functions works in the light thread pool:");
     check_member_function(pool_light);
+    print_header("Checking that submit_if_available() with member functions works in the full thread pool:");
+    check_member_function_if_available(pool_full);
 
     print_header("Checking that submitting member functions from within an object works in the full thread pool:");
     check_member_function_within_object(pool_full);
     print_header("Checking that submitting member functions from within an object works in the light thread pool:");
     check_member_function_within_object(pool_light);
+    print_header("Checking that submit_if_available() with member functions from within an object works in the full thread pool:");
+    check_member_function_within_object_if_available(pool_full);
 
     print_header("Checking that wait_for_tasks() works in the full thread pool...");
     check_wait_for_tasks(pool_full);
@@ -1318,7 +1670,7 @@ void do_tests()
     print_header("Checking that purge() works in the full thread pool:");
     check_purge(pool_full);
 
-#ifndef BS_THREAD_POOL_DISABLE_TRY_CATCH
+#ifndef BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
     print_header("Checking that exception handling works in the full thread pool:");
     check_exceptions_submit(pool_full);
     check_exceptions_multi_future(pool_full);
