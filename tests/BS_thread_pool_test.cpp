@@ -1670,7 +1670,6 @@ void do_tests()
     print_header("Checking that purge() works in the full thread pool:");
     check_purge(pool_full);
 
-#ifndef BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
     print_header("Checking that exception handling works in the full thread pool:");
     check_exceptions_submit(pool_full);
     check_exceptions_multi_future(pool_full);
