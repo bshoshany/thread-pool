@@ -540,7 +540,6 @@ public:
         return task_promise->get_future();
     }
 
-#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     /**
      * @brief Submit a function with zero or more arguments into the task queue if running + queued < #threads, returning false otherwise. If the function has a return value, get a future for the eventual returned value. If the function has no return value, get an std::future<void> which can be used to wait until the task finishes. Returns a pair of future and bool indicating whether the task was submitted or not.
      *

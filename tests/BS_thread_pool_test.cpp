@@ -656,23 +656,25 @@ void check_submit_if_available(P& pool)
     {
         bool flag = false;
         std::future<int> flag_future = pool.submit_if_available(
-            [&flag]
-            {
-                flag = true;
-                return 42;
-            }).first;
+                                               [&flag]
+                                               {
+                                                   flag = true;
+                                                   return 42;
+                                               })
+                                           .first;
         check(flag_future.get() == 42 && flag);
     }
     dual_println("Checking that submit_if_available() works for a function with one argument and a return value...");
     {
         bool flag = false;
         std::future<int> flag_future = pool.submit_if_available(
-            [](bool* flag_)
-            {
-                *flag_ = true;
-                return 42;
-            },
-            &flag).first;
+                                               [](bool* flag_)
+                                               {
+                                                   *flag_ = true;
+                                                   return 42;
+                                               },
+                                               &flag)
+                                           .first;
         check(flag_future.get() == 42 && flag);
     }
     dual_println("Checking that submit_if_available() works for a function with two arguments and a return value...");
@@ -680,12 +682,13 @@ void check_submit_if_available(P& pool)
         bool flag1 = false;
         bool flag2 = false;
         std::future<int> flag_future = pool.submit_if_available(
-            [](bool* flag1_, bool* flag2_)
-            {
-                *flag1_ = *flag2_ = true;
-                return 42;
-            },
-            &flag1, &flag2).first;
+                                               [](bool* flag1_, bool* flag2_)
+                                               {
+                                                   *flag1_ = *flag2_ = true;
+                                                   return 42;
+                                               },
+                                               &flag1, &flag2)
+                                           .first;
         check(flag_future.get() == 42 && flag1 && flag2);
     }
     dual_println("Checking that submit_if_available() does not create unnecessary copies of the function object...");
@@ -712,13 +715,14 @@ void check_submit_if_available(P& pool)
         int64_t pass_me_by_cref = 0;
         std::atomic<bool> release = false;
         std::future<void> fut = pool.submit_if_available(
-            [&release](const int64_t& passed_by_cref)
-            {
-                while (!release)
-                    std::this_thread::yield();
-                check(passed_by_cref == 1);
-            },
-            std::cref(pass_me_by_cref)).first;
+                                        [&release](const int64_t& passed_by_cref)
+                                        {
+                                            while (!release)
+                                                std::this_thread::yield();
+                                            check(passed_by_cref == 1);
+                                        },
+                                        std::cref(pass_me_by_cref))
+                                    .first;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         ++pass_me_by_cref;
         release = true;
@@ -1670,6 +1674,7 @@ void do_tests()
     print_header("Checking that purge() works in the full thread pool:");
     check_purge(pool_full);
 
+#ifndef BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
     print_header("Checking that exception handling works in the full thread pool:");
     check_exceptions_submit(pool_full);
     check_exceptions_multi_future(pool_full);
