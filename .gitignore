@@ -1,1 +1,7 @@
 build
+*.log
+/thread-pool.sln
+/thread-pool.vcxproj
+/thread-pool.vcxproj.filters
+/thread-pool.vcxproj.user
+/x64/Debug
