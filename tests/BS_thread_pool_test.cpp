@@ -1036,6 +1036,7 @@ void check_task_monitoring(BS::thread_pool& pool)
  */
 void check_pausing(BS::thread_pool& pool)
 {
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     BS::concurrency_t n = std::min<BS::concurrency_t>(std::thread::hardware_concurrency(), 4);
     dual_println("Resetting pool to ", n, " threads.");
     pool.reset(n);
@@ -1093,6 +1094,7 @@ void check_pausing(BS::thread_pool& pool)
 
     dual_println("Resetting pool to ", std::thread::hardware_concurrency(), " threads.");
     pool.reset(std::thread::hardware_concurrency());
+#endif
 }
 
 /**
@@ -1308,15 +1310,19 @@ void do_tests()
     print_header("Checking that task monitoring works in the full thread pool:");
     check_task_monitoring(pool_full);
 
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     print_header("Checking that pausing works in the full thread pool:");
     check_pausing(pool_full);
+#endif
 
     print_header("Checking that purge() works in the full thread pool:");
     check_purge(pool_full);
 
+#ifndef BS_THREAD_POOL_DISABLE_TRY_CATCH
     print_header("Checking that exception handling works in the full thread pool:");
     check_exceptions_submit(pool_full);
     check_exceptions_multi_future(pool_full);
+#endif
     print_header("Checking that exception handling works in the light thread pool:");
     check_exceptions_submit(pool_light);
 

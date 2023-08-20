@@ -246,7 +246,7 @@ public:
     /**
      * @brief Construct a new thread pool.
      *
-     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
+     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
      */
     thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
@@ -309,6 +309,7 @@ public:
         return thread_count;
     }
 
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     /**
      * @brief Check whether the pool is currently paused.
      *
@@ -319,6 +320,7 @@ public:
         const std::scoped_lock tasks_lock(tasks_mutex);
         return paused;
     }
+#endif
 
     /**
      * @brief Parallelize a loop by automatically splitting it into blocks and submitting each block separately to the queue. Returns a multi_future object that contains the futures for all of the blocks.
@@ -368,14 +370,16 @@ public:
         return parallelize_loop(0, index_after_last, std::forward<F>(loop), num_blocks);
     }
 
-    /**
-     * @brief Pause the pool. The workers will temporarily stop retrieving new tasks out of the queue, although any tasks already executed will keep running until they are finished.
-     */
+/**
+ * @brief Pause the pool. The workers will temporarily stop retrieving new tasks out of the queue, although any tasks already executed will keep running until they are finished.
+ */
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     void pause()
     {
         const std::scoped_lock tasks_lock(tasks_mutex);
         paused = true;
     }
+#endif
 
     /**
      * @brief Purge all the tasks waiting in the queue. Tasks that are currently running will not be affected, but any tasks still waiting in the queue will be discarded, and will never be executed by the threads. Please note that there is no way to restore the purged tasks.
@@ -451,14 +455,18 @@ public:
     void reset(const concurrency_t thread_count_ = 0)
     {
         std::unique_lock tasks_lock(tasks_mutex);
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
         const bool was_paused = paused;
         paused = true;
+#endif
         tasks_lock.unlock();
         wait_for_tasks();
         destroy_threads();
         thread_count = determine_thread_count(thread_count_);
         threads = std::make_unique<std::thread[]>(thread_count);
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
         paused = was_paused;
+#endif
         create_threads();
     }
 
@@ -479,6 +487,17 @@ public:
         push_task(
             [task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...), task_promise]
             {
+#ifdef BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
+                if constexpr (std::is_void_v<R>)
+                {
+                    std::invoke(task_function);
+                    task_promise->set_value();
+                }
+                else
+                {
+                    task_promise->set_value(std::invoke(task_function));
+                }
+#else
                 try
                 {
                     if constexpr (std::is_void_v<R>)
@@ -501,10 +520,12 @@ public:
                     {
                     }
                 }
+#endif
             });
         return task_promise->get_future();
     }
 
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     /**
      * @brief Unpause the pool. The workers will resume retrieving new tasks out of the queue.
      */
@@ -513,6 +534,7 @@ public:
         const std::scoped_lock tasks_lock(tasks_mutex);
         paused = false;
     }
+#endif
 
     /**
      * @brief Wait for tasks to be completed. Normally, this function waits for all tasks, both those that are currently running in the threads and those that are still waiting in the queue. However, if the pool is paused, this function only waits for the currently running tasks (otherwise it would wait forever). Note: To wait for just one specific task, use submit() instead, and call the wait() member function of the generated future.
@@ -521,7 +543,11 @@ public:
     {
         std::unique_lock tasks_lock(tasks_mutex);
         waiting = true;
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
         tasks_done_cv.wait(tasks_lock, [this] { return !tasks_running && (paused || tasks.empty()); });
+#else
+        tasks_done_cv.wait(tasks_lock, [this] { return !tasks_running && tasks.empty(); });
+#endif
         waiting = false;
     }
 
@@ -538,7 +564,11 @@ public:
     {
         std::unique_lock tasks_lock(tasks_mutex);
         waiting = true;
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
         const bool status = tasks_done_cv.wait_for(tasks_lock, duration, [this] { return !tasks_running && (paused || tasks.empty()); });
+#else
+        const bool status = tasks_done_cv.wait_for(tasks_lock, duration, [this] { return !tasks_running && tasks.empty(); });
+#endif
         waiting = false;
         return status;
     }
@@ -556,7 +586,11 @@ public:
     {
         std::unique_lock tasks_lock(tasks_mutex);
         waiting = true;
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
         const bool status = tasks_done_cv.wait_until(tasks_lock, timeout_time, [this] { return !tasks_running && (paused || tasks.empty()); });
+#else
+        const bool status = tasks_done_cv.wait_until(tasks_lock, timeout_time, [this] { return !tasks_running && tasks.empty(); });
+#endif
         waiting = false;
         return status;
     }
@@ -628,8 +662,10 @@ private:
             task_available_cv.wait(tasks_lock, [this] { return !tasks.empty() || !workers_running; });
             if (!workers_running)
                 break;
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
             if (paused)
                 continue;
+#endif
             task = std::move(tasks.front());
             tasks.pop();
             ++tasks_running;
@@ -637,8 +673,13 @@ private:
             task();
             tasks_lock.lock();
             --tasks_running;
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
             if (waiting && !tasks_running && (paused || tasks.empty()))
                 tasks_done_cv.notify_all();
+#else
+            if (waiting && !tasks_running && tasks.empty())
+                tasks_done_cv.notify_all();
+#endif
         }
     }
 
@@ -646,10 +687,12 @@ private:
     // Private data
     // ============
 
+#ifndef BS_THREAD_POOL_DISABLE_PAUSE
     /**
      * @brief A flag indicating whether the workers should pause. When set to true, the workers temporarily stop retrieving new tasks out of the queue, although any tasks already executed will keep running until they are finished. When set to false again, the workers resume retrieving tasks.
      */
     bool paused = false;
+#endif
 
     /**
      * @brief A condition variable to notify worker() that a new task has become available.
