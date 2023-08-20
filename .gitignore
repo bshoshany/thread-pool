@@ -1,7 +1,15 @@
 build
+x64
 *.log
 /thread-pool.sln
 /thread-pool.vcxproj
 /thread-pool.vcxproj.filters
 /thread-pool.vcxproj.user
 /x64/Debug
+/.vs/thread-pool/FileContentIndex
+/.vs/thread-pool/v17/ipch/AutoPCH/abbbca832ed25121
+/.vs/thread-pool/v17/.suo
+/.vs/thread-pool/v17/.wsuo
+/.vs/thread-pool/v17
+*.json
+/.vs/slnx.sqlite
