@@ -452,14 +452,13 @@ public:
      *
      * @tparam F The type of the function.
      * @tparam A The types of the arguments.
-     * @param replaceWithThreadID If true, the first argument will be replaced with the thread ID.
      * @param checkIfFull If true, the task will not be pushed if the queue is full.
      * @param invokeIfFull If true, the task will be invoked immediately if the queue is full.
      * @param task The function to push.
      * @param args The zero or more arguments to pass to the function. Note that if the task is a class member function, the first argument must be a pointer to the object, i.e. &object (or this), followed by the actual arguments.
      */
     template <typename F, typename... A>
-    bool push_task(bool replaceWithThreadID, bool checkIfFull, bool invokeIfFull, F&& task, A&&... args)
+    bool push_task(bool checkIfFull, bool invokeIfFull, F&& task, A&&... args)
     {
         tasks_mutex.lock();
         if ((!checkIfFull && !invokeIfFull) || tasks_running + tasks.size() < thread_count)
@@ -554,7 +553,6 @@ public:
      * @tparam F The type of the function.
      * @tparam A The types of the zero or more arguments to pass to the function.
      * @tparam R The return type of the function (can be void).
-     * @param replaceWithThreadID If true, the first argument will be replaced with the thread ID.
      * @param checkIfFull If true, the task will not be pushed if the queue is full.
      * @param invokeIfFull If true, the task will be invoked immediately if the queue is full.
      * @param task The function to submit.
@@ -562,7 +560,7 @@ public:
      * @return A future to be used later to wait for the function to finish executing and/or obtain its returned value if it has one.
      */
     template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
-    [[nodiscard]] std::future<R> submit(bool replaceWithThreadID, bool checkIfFull, bool invokeIfFull, F&& task, A&&... args)
+    [[nodiscard]] std::future<R> submit(bool checkIfFull, bool invokeIfFull, F&& task, A&&... args)
     {
         std::shared_ptr<std::promise<R>> task_promise = std::make_shared<std::promise<R>>();
         auto lambda = [task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...), task_promise]
