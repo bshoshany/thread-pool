@@ -523,6 +523,168 @@ void check_push_task_if_available_limit(P& pool)
 }
 
 /**
+ * @brief Check that push_task_if_available_else_invoke() works.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_push_task_if_available_else_invoke(P& pool)
+{
+    dual_println("Checking that push_task_if_available_else_invoke() works for a function with no arguments or return value...");
+    {
+        bool flag = false;
+        pool.push_task_if_available_else_invoke([&flag] { flag = true; });
+        pool.wait_for_tasks();
+        check(flag);
+    }
+    dual_println("Checking that push_task_if_available_else_invoke() works for a function with one argument and no return value...");
+    {
+        bool flag = false;
+        pool.push_task_if_available_else_invoke([](bool* flag_) { *flag_ = true; }, &flag);
+        pool.wait_for_tasks();
+        check(flag);
+    }
+    dual_println("Checking that push_task_if_available_else_invoke() works for a function with two arguments and no return value...");
+    {
+        bool flag1 = false;
+        bool flag2 = false;
+        pool.push_task_if_available_else_invoke([](bool* flag1_, bool* flag2_) { *flag1_ = *flag2_ = true; }, &flag1, &flag2);
+        pool.wait_for_tasks();
+        check(flag1 && flag2);
+    }
+    dual_println("Checking that push_task_if_available_else_invoke() does not create unnecessary copies of the function object...");
+    {
+        bool copied = false;
+        bool moved = false;
+        pool.push_task_if_available_else_invoke(
+            [detect = detect_copy_move(), &copied, &moved]
+            {
+                copied = detect.copied;
+                moved = detect.moved;
+            });
+        pool.wait_for_tasks();
+        check(!copied && moved);
+    }
+    dual_println("Checking that push_task_if_available_else_invoke() correctly accepts arguments passed by value, reference, and constant reference...");
+    {
+        int64_t pass_me_by_value = 0;
+        pool.push_task_if_available_else_invoke(
+            [](int64_t passed_by_value)
+            {
+                if (++passed_by_value)
+                    std::this_thread::yield();
+            },
+            pass_me_by_value);
+        pool.wait_for_tasks();
+        check(pass_me_by_value == 0);
+        int64_t pass_me_by_ref = 0;
+        pool.push_task_if_available_else_invoke([](int64_t& passed_by_ref) { ++passed_by_ref; }, std::ref(pass_me_by_ref));
+        pool.wait_for_tasks();
+        check(pass_me_by_ref == 1);
+        int64_t pass_me_by_cref = 0;
+        std::atomic<bool> release = false;
+        pool.push_task_if_available_else_invoke(
+            [&release](const int64_t& passed_by_cref)
+            {
+                while (!release)
+                    std::this_thread::yield();
+                check(passed_by_cref == 1);
+            },
+            std::cref(pass_me_by_cref));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++pass_me_by_cref;
+        release = true;
+        pool.wait_for_tasks();
+    }
+    dual_println("Checking that push_task_if_available_else_invoke() correctly invokes functions if queue is full...");
+    {
+        BS::concurrency_t n = pool.get_thread_count();
+        std::vector<int> vec;
+        std::mutex vecMutex;
+        vec.resize(n * 2, -1);
+        dual_println("Submitting ", n, " tasks, each one waiting for 200ms.");
+        for (BS::concurrency_t i = 0; i < n; ++i)
+            pool.push_task_if_available_else_invoke(
+                [i, &vec, &vecMutex]
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    vecMutex.lock();
+                    vec[i] = i;
+                    vecMutex.unlock();
+                });
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+        dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+        check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+        dual_println("Submitting ", n, " tasks, each without the wait.");
+        for (BS::concurrency_t i = n; i < n * 2; ++i)
+            pool.push_task_if_available_else_invoke(
+                [i, &vec, &vecMutex]
+                {
+                    vecMutex.lock();
+                    vec[i] = i;
+                    vecMutex.unlock();
+                });
+        dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+        dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+        check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+        pool.wait_for_tasks();
+        for (int i = 0; i < n * 2; ++i){
+            dual_print("vec[", i, "] = ", vec[i], " ");
+            check(vec[i] == i);
+        }
+    }
+}
+
+/**
+ * @brief Check that push_task_if_available_else_invoke() invokes passed functions if the queue is full.
+ *
+ * @tparam P The type of the thread pool to check.
+ * @param pool The thread pool to check.
+ */
+template <typename P>
+void check_push_task_if_available_else_invoke_full(P& pool)
+{
+    BS::concurrency_t n = pool.get_thread_count();
+    std::vector<int> vec;
+    std::mutex vecMutex;
+    vec.resize(n * 2, -1);
+    dual_println("Submitting ", n, " tasks, each one waiting for 200ms.");
+    for (BS::concurrency_t i = 0; i < n; ++i)
+        pool.push_task_if_available_else_invoke(
+            [i, &vec, &vecMutex]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                vecMutex.lock();
+                vec[i] = i;
+                vecMutex.unlock();
+            });
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+    dual_println("Submitting ", n, " tasks, each without the wait.");
+    for (BS::concurrency_t i = n; i < n * 2; ++i)
+        pool.push_task_if_available_else_invoke(
+            [i, &vec, &vecMutex]
+            {
+                vecMutex.lock();
+                vec[i] = i;
+                vecMutex.unlock();
+            });
+    dual_println("After submission, should have: ", n, " tasks total, ", n, " tasks running, ", 0, " tasks queued...");
+    dual_print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    check(pool.get_tasks_total() == n && pool.get_tasks_running() == n && pool.get_tasks_queued() == 0);
+    pool.wait_for_tasks();
+    for (int i = 0; i < n * 2; ++i)
+    {
+        dual_print("vec[", i, "] = ", vec[i], " ");
+        check(vec[i] == i);
+    }
+}
+
+/**
  * @brief Check that submit() works.
  *
  * @tparam P The type of the thread pool to check.
@@ -1623,6 +1785,10 @@ void do_tests()
     check_push_task_if_available(pool_full);
     print_header("Checking that push_task_if_available() doesn't accept more tasks than there are threads:");
     check_push_task_if_available_limit(pool_full);
+    print_header("Checking that push_task_if_available_else_invoke() works in the full thread pool:");
+    check_push_task_if_available_else_invoke(pool_full);
+    print_header("Checking that push_task_if_available_else_invoke() correctly invokes passed functions if the queue is full:");
+    check_push_task_if_available_else_invoke_full(pool_full);
 
     print_header("Checking that submit() works in the full thread pool:");
     check_submit(pool_full);
