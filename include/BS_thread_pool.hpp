@@ -247,10 +247,11 @@ public:
      * @brief Construct a new thread pool.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
+     * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
-    thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
+    thread_pool(const concurrency_t thread_count_ = 0, std::vector<std::thread::id>* thread_ID_vector_pointer = nullptr) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
-        create_threads();
+        create_threads(thread_ID_vector_pointer);
     }
 
     /**
@@ -482,7 +483,7 @@ public:
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
      */
-    void reset(const concurrency_t thread_count_ = 0)
+    void reset(const concurrency_t thread_count_ = 0, std::vector<std::thread::id>* thread_ID_vector_pointer = nullptr)
     {
         std::unique_lock tasks_lock(tasks_mutex);
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
@@ -497,7 +498,7 @@ public:
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
         paused = was_paused;
 #endif
-        create_threads();
+        create_threads(thread_ID_vector_pointer);
     }
 
     /**
@@ -686,9 +687,13 @@ private:
 
     /**
      * @brief Create the threads in the pool and assign a worker to each thread.
+     * 
+     * @param thread_ID_vector_pointer A pointer to a vector that will be filled with the IDs of the threads in the pool, assuming the pointer isn't null.
      */
-    void create_threads()
+    void create_threads(std::vector<std::thread::id>* thread_ID_vector_pointer)
     {
+        if (thread_ID_vector_pointer != nullptr)
+            thread_ID_vector_pointer->reserve(thread_count);
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             workers_running = true;
@@ -696,6 +701,8 @@ private:
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i] = std::thread(&thread_pool::worker, this);
+            if (thread_ID_vector_pointer != nullptr)
+                thread_ID_vector_pointer->push_back(threads[i].get_id());
         }
     }
 
