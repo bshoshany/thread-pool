@@ -482,15 +482,16 @@ public:
      * @brief Reset the number of threads in the pool. Waits for all currently running tasks to be completed, then destroys all threads in the pool and creates a new thread pool with the new number of threads. Any tasks that were waiting in the queue before the pool was reset will then be executed by the new threads. If the pool was paused before resetting it, the new pool will be paused as well.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
+     * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
     void reset(const concurrency_t thread_count_ = 0, std::vector<std::thread::id>* thread_ID_vector_pointer = nullptr)
     {
-        std::unique_lock tasks_lock(tasks_mutex);
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
+        std::unique_lock tasks_lock(tasks_mutex);
         const bool was_paused = paused;
         paused = true;
-#endif
         tasks_lock.unlock();
+#endif
         wait_for_tasks();
         destroy_threads();
         thread_count = determine_thread_count(thread_count_);
