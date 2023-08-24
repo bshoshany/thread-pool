@@ -563,7 +563,7 @@ public:
     [[nodiscard]] std::future<R> submit(bool checkIfFull, bool invokeIfFull, F&& task, A&&... args)
     {
         std::shared_ptr<std::promise<R>> task_promise = std::make_shared<std::promise<R>>();
-        auto lambda = [task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...), task_promise]
+        auto taskPushLambda = [task_function = std::bind(std::forward<F>(task), std::forward<A>(args)...), task_promise]
         {
 #ifndef BS_THREAD_POOL_DISABLE_ERROR_FORWARDING
             try
@@ -595,7 +595,7 @@ public:
         tasks_mutex.lock();
         if ((!checkIfFull && !invokeIfFull) || tasks_running + tasks.size() < thread_count)
         {
-            tasks.push(lambda);
+            tasks.push(taskPushLambda);
             tasks_mutex.unlock();
             task_available_cv.notify_one();
             return task_promise->get_future();
@@ -603,7 +603,7 @@ public:
         tasks_mutex.unlock();
         if (invokeIfFull)
         {
-            lambda();
+            taskPushLambda();
             return task_promise->get_future();
         }
         return std::future<R>;
