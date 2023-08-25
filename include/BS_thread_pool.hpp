@@ -247,7 +247,6 @@ public:
      * @brief Construct a new thread pool.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
-     * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
     thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
@@ -482,7 +481,6 @@ public:
      * @brief Reset the number of threads in the pool. Waits for all currently running tasks to be completed, then destroys all threads in the pool and creates a new thread pool with the new number of threads. Any tasks that were waiting in the queue before the pool was reset will then be executed by the new threads. If the pool was paused before resetting it, the new pool will be paused as well.
      *
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
-     * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
     void reset(const concurrency_t thread_count_ = 0)
     {
@@ -688,8 +686,6 @@ private:
 
     /**
      * @brief Create the threads in the pool and assign a worker to each thread.
-     *
-     * @param thread_ID_vector_pointer A pointer to a vector that will be filled with the IDs of the threads in the pool, assuming the pointer isn't null.
      */
     void create_threads()
     {
