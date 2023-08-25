@@ -4,6 +4,7 @@
 
 #include <condition_variable> // std::condition_variable
 #include <functional>         // std::function
+#include <memory>             // std::make_unique, std::unique_ptr
 #include <mutex>              // std::mutex, std::unique_lock
 #include <queue>              // std::queue
 #include <thread>             // std::thread
@@ -17,25 +18,17 @@ struct [[nodiscard]] thread_pool_minimal
     size_t tasks_running = 0;
     mutable std::mutex tasks_mutex = {};
     unsigned int thread_count = 0;
-    std::thread* threads;
+    std::unique_ptr<std::thread[]> threads = nullptr;
     bool waiting = false, workers_running = true;
-
-    thread_pool_minimal(const unsigned int thread_count_ = 0)
-    {
-        if (thread_count_ > 0)
-            thread_count = thread_count_;
-        else
-        {
-            if (std::thread::hardware_concurrency() > 0)
-                thread_count = std::thread::hardware_concurrency();
-            else
-                thread_count = 1;
-        }
-        threads = reinterpret_cast<std::thread*>(malloc(sizeof(std::thread) * thread_count));
-        for (unsigned int i = 0; i < thread_count; ++i)
-            threads[i] = std::thread(&thread_pool_minimal::worker, this);
-    }
     
+    thread_pool_minimal(const unsigned int thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
+    {
+        for (unsigned int i = 0; i < thread_count; ++i)
+        {
+            threads[i] = std::thread(&thread_pool_minimal::worker, this);
+        }
+    }
+
     ~thread_pool_minimal()
     {
         std::unique_lock tasks_lock(tasks_mutex);
@@ -45,11 +38,11 @@ struct [[nodiscard]] thread_pool_minimal
         tasks_lock.unlock();
         task_available_cv.notify_all();
         for (unsigned int i = 0; i < thread_count; ++i)
+        {
             threads[i].join();
-        std::destroy_n(threads, thread_count);
-        free(threads);
+        }
     }
-
+    
     void wait_for_tasks()
     {
         std::unique_lock tasks_lock(tasks_mutex);
@@ -59,6 +52,7 @@ struct [[nodiscard]] thread_pool_minimal
     }
 
 private:
+    
     void worker()
     {
         std::function<void()> task;
@@ -77,6 +71,19 @@ private:
             --tasks_running;
             if (waiting && !tasks_running && tasks.empty())
                 tasks_done_cv.notify_all();
+        }
+    }
+    
+    [[nodiscard]] unsigned int determine_thread_count(const unsigned int thread_count_) const
+    {
+        if (thread_count_ > 0)
+            return thread_count_;
+        else
+        {
+            if (std::thread::hardware_concurrency() > 0)
+                return std::thread::hardware_concurrency();
+            else
+                return 1;
         }
     }
 };

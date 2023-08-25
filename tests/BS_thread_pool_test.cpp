@@ -56,7 +56,7 @@ constexpr bool enable_tests = true;
 constexpr bool enable_benchmarks = true;
 
 // Whether to perform the long deadlock tests. Defaults to false since they can take much longer than the other tests.
-constexpr bool enable_long_deadlock_tests = true;
+constexpr bool enable_long_deadlock_tests = false;
 
 // A global synced_stream object which prints to std::cout.
 BS::synced_stream sync_cout(std::cout);
