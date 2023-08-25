@@ -688,7 +688,7 @@ private:
 
     /**
      * @brief Create the threads in the pool and assign a worker to each thread.
-     * 
+     *
      * @param thread_ID_vector_pointer A pointer to a vector that will be filled with the IDs of the threads in the pool, assuming the pointer isn't null.
      */
     void create_threads(std::vector<std::thread::id>* thread_ID_vector_pointer)
@@ -775,6 +775,9 @@ private:
         }
     }
 
+#ifdef BS_THREAD_POOL_YEAH_I_KNOW_WHAT_IM_DOING
+public:
+#endif
     // ============
     // Private data
     // ============
