@@ -6,23 +6,21 @@
 #include <functional>         // std::function
 #include <mutex>              // std::mutex, std::unique_lock
 #include <queue>              // std::queue
-#include <type_traits>        // std::invoke_result_t
 #include <thread>             // std::thread
 
 namespace BS
 {
-using concurrency_t = std::invoke_result_t<decltype(std::thread::hardware_concurrency)>;
 struct [[nodiscard]] thread_pool_minimal
 {
     std::condition_variable task_available_cv = {}, tasks_done_cv = {};
     std::queue<std::function<void()>> tasks = {};
     size_t tasks_running = 0;
     mutable std::mutex tasks_mutex = {};
-    concurrency_t thread_count = 0;
+    unsigned int thread_count = 0;
     std::thread* threads;
     bool waiting = false, workers_running = true;
 
-    thread_pool_minimal(const concurrency_t thread_count_ = 0)
+    thread_pool_minimal(const unsigned int thread_count_ = 0)
     {
         if (thread_count_ > 0)
             thread_count = thread_count_;
@@ -34,7 +32,7 @@ struct [[nodiscard]] thread_pool_minimal
                 thread_count = 1;
         }
         threads = reinterpret_cast<std::thread*>(malloc(sizeof(std::thread) * thread_count));
-        for (concurrency_t i = 0; i < thread_count; ++i)
+        for (unsigned int i = 0; i < thread_count; ++i)
             threads[i] = std::thread(&thread_pool_minimal::worker, this);
     }
     
@@ -46,7 +44,7 @@ struct [[nodiscard]] thread_pool_minimal
         workers_running = false;
         tasks_lock.unlock();
         task_available_cv.notify_all();
-        for (concurrency_t i = 0; i < thread_count; ++i)
+        for (unsigned int i = 0; i < thread_count; ++i)
             threads[i].join();
         std::destroy_n(threads, thread_count);
         free(threads);
