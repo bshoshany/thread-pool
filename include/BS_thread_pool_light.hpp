@@ -274,6 +274,9 @@ private:
         }
     }
 
+#ifdef BS_THREAD_POOL_LIGHT_YEAH_I_KNOW_WHAT_IM_DOING
+public:
+#endif
     // ============
     // Private data
     // ============
