@@ -244,9 +244,9 @@ public:
     // ============================
 
     /**
-     * @brief Construct a new thread pool.
+     * @brief Construct a new thread pool. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
      *
-     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
+     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
      */
     thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
