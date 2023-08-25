@@ -52,7 +52,6 @@ struct [[nodiscard]] thread_pool_minimal
         free(threads);
     }
 
-#ifdef BS_THREAD_POOL_MINIMAL_ENABLE_WAIT_FOR_TASKS
     void wait_for_tasks()
     {
         std::unique_lock tasks_lock(tasks_mutex);
@@ -60,7 +59,6 @@ struct [[nodiscard]] thread_pool_minimal
         tasks_done_cv.wait(tasks_lock, [this] { return !tasks_running && tasks.empty(); });
         waiting = false;
     }
-#endif
 
 private:
     void worker()
