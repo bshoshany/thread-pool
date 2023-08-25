@@ -1,6 +1,6 @@
 #pragma once
 
-#define BS_THREAD_POOL_MINIMAL_VERSION "v1.0.0 (2023-08-25)"
+#define BS_THREAD_POOL_MINIMAL_VERSION "v0.1.0 (2023-08-25)"
 
 #include <condition_variable> // std::condition_variable
 #include <functional>         // std::function
