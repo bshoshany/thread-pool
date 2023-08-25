@@ -40,6 +40,7 @@
 // Include the header files for the thread pool library.
 #include "../include/BS_thread_pool.hpp"
 #include "../include/BS_thread_pool_light.hpp"
+#include "../include/BS_thread_pool_minimal.hpp"
 
 // ================
 // Global variables
@@ -55,7 +56,7 @@ constexpr bool enable_tests = true;
 constexpr bool enable_benchmarks = true;
 
 // Whether to perform the long deadlock tests. Defaults to false since they can take much longer than the other tests.
-constexpr bool enable_long_deadlock_tests = false;
+constexpr bool enable_long_deadlock_tests = true;
 
 // A global synced_stream object which prints to std::cout.
 BS::synced_stream sync_cout(std::cout);
@@ -1509,6 +1510,7 @@ int main()
 
     dual_println("Thread pool library version is ", BS_THREAD_POOL_VERSION, ".");
     dual_println("Light thread pool library version is ", BS_THREAD_POOL_LIGHT_VERSION, ".");
+    dual_println("Minimal thread pool library version is ", BS_THREAD_POOL_MINIMAL_VERSION, ".");
     dual_println("Hardware concurrency is ", std::thread::hardware_concurrency(), ".");
     if (output_log)
         dual_println("Generating log file: ", log_filename, ".\n");

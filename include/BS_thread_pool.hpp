@@ -246,22 +246,12 @@ public:
     /**
      * @brief Construct a new thread pool.
      *
-     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE, BS_THREAD_POOL_DISABLE_ERROR_FORWARDING, BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR, and BS_THREAD_POOL_DISABLE_ADDITIONAL_SUBMIT_FUNCTIONALITY.
+     * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads. Feature flags are BS_THREAD_POOL_DISABLE_PAUSE and BS_THREAD_POOL_DISABLE_ERROR_FORWARDING.
      * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
-    thread_pool(const concurrency_t thread_count_ = 0
-#ifndef BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR
-                ,
-                std::vector<std::thread::id>* thread_ID_vector_pointer = nullptr
-#endif
-                )
-        : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
+    thread_pool(const concurrency_t thread_count_ = 0) : thread_count(determine_thread_count(thread_count_)), threads(std::make_unique<std::thread[]>(determine_thread_count(thread_count_)))
     {
-        create_threads(
-#ifndef BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR
-            thread_ID_vector_pointer
-#endif
-        );
+        create_threads();
     }
 
     /**
@@ -458,7 +448,6 @@ public:
         task_available_cv.notify_one();
     }
 
-#ifndef BS_THREAD_POOL_DISABLE_ADDITIONAL_SUBMIT_FUNCTIONALITY
     /**
      * @brief Push a function with zero or more arguments, but no return value, into the task queue. Does not return a future, so the user must use wait_for_tasks() or some other method to ensure that the task finishes executing, otherwise bad things will happen. Returns true if the task was pushed or invoked, false if it was discarded.
      *
@@ -488,7 +477,6 @@ public:
         }
         return false;
     }
-#endif
 
     /**
      * @brief Reset the number of threads in the pool. Waits for all currently running tasks to be completed, then destroys all threads in the pool and creates a new thread pool with the new number of threads. Any tasks that were waiting in the queue before the pool was reset will then be executed by the new threads. If the pool was paused before resetting it, the new pool will be paused as well.
@@ -496,7 +484,7 @@ public:
      * @param thread_count_ The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. This is usually determined by the number of cores in the CPU. If a core is hyperthreaded, it will count as two threads.
      * @param thread_ID_vector_pointer The pointer to a vector<std::thread::id> to push the thread ids to on creation. Defaults to nullptr.
      */
-    void reset(const concurrency_t thread_count_ = 0, std::vector<std::thread::id>* thread_ID_vector_pointer = nullptr)
+    void reset(const concurrency_t thread_count_ = 0)
     {
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
         std::unique_lock tasks_lock(tasks_mutex);
@@ -511,7 +499,7 @@ public:
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
         paused = was_paused;
 #endif
-        create_threads(thread_ID_vector_pointer);
+        create_threads();
     }
 
     /**
@@ -561,7 +549,6 @@ public:
         return task_promise->get_future();
     }
 
-#ifndef BS_THREAD_POOL_DISABLE_ADDITIONAL_SUBMIT_FUNCTIONALITY
     /**
      * @brief Submit a function with zero or more arguments into the task queue. If the function has a return value, get a future for the eventual returned value. If the function has no return value, get an std::future<void> which can be used to wait until the task finishes. Returns a default-constructed future (which returns false for .valid()) if checkIfFull is true, the queue is full, and invokeIfFull is false.
      *
@@ -623,7 +610,6 @@ public:
         }
         return std::future<R>;
     }
-#endif
 
 #ifndef BS_THREAD_POOL_DISABLE_PAUSE
     /**
@@ -705,16 +691,8 @@ private:
      *
      * @param thread_ID_vector_pointer A pointer to a vector that will be filled with the IDs of the threads in the pool, assuming the pointer isn't null.
      */
-    void create_threads(
-#ifndef BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR
-        std::vector<std::thread::id>* thread_ID_vector_pointer
-#endif
-    )
+    void create_threads()
     {
-#ifndef BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR
-        if (thread_ID_vector_pointer != nullptr)
-            thread_ID_vector_pointer->reserve(thread_count);
-#endif
         {
             const std::scoped_lock tasks_lock(tasks_mutex);
             workers_running = true;
@@ -722,10 +700,6 @@ private:
         for (concurrency_t i = 0; i < thread_count; ++i)
         {
             threads[i] = std::thread(&thread_pool::worker, this);
-#ifndef BS_THREAD_POOL_DISABLE_THREAD_ID_VECTOR
-            if (thread_ID_vector_pointer != nullptr)
-                thread_ID_vector_pointer->push_back(threads[i].get_id());
-#endif
         }
     }
 
