@@ -621,7 +621,6 @@ private:
      */
     void worker()
     {
-        std::function<void()> task;
         while (true)
         {
             std::unique_lock tasks_lock(tasks_mutex);
@@ -630,11 +629,12 @@ private:
                 break;
             if (paused)
                 continue;
-            task = std::move(tasks.front());
+            auto task = std::move(tasks.front());
             tasks.pop();
             ++tasks_running;
             tasks_lock.unlock();
             task();
+            task = {};
             tasks_lock.lock();
             --tasks_running;
             if (waiting && !tasks_running && (paused || tasks.empty()))

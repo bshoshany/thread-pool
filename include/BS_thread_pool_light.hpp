@@ -255,18 +255,18 @@ private:
      */
     void worker()
     {
-        std::function<void()> task;
         while (true)
         {
             std::unique_lock tasks_lock(tasks_mutex);
             task_available_cv.wait(tasks_lock, [this] { return !tasks.empty() || !workers_running; });
             if (!workers_running)
                 break;
-            task = std::move(tasks.front());
+            auto task = std::move(tasks.front());
             tasks.pop();
             ++tasks_running;
             tasks_lock.unlock();
             task();
+            task = {};
             tasks_lock.lock();
             --tasks_running;
             if (waiting && !tasks_running && tasks.empty())
