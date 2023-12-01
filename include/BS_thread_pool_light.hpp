@@ -101,10 +101,17 @@ public:
             block_size = 1;
             num_blocks = (total_size > 1) ? total_size : 1;
         }
+        size_t blocks_with_extra_task = total_size % num_blocks;
         if (total_size > 0)
         {
+            T start = first_index;
             for (size_t i = 0; i < num_blocks; ++i)
-                push_task(std::forward<F>(loop), static_cast<T>(i * block_size) + first_index, (i == num_blocks - 1) ? index_after_last : (static_cast<T>((i + 1) * block_size) + first_index));
+            {
+                size_t this_block_size = block_size + (i < blocks_with_extra_task);
+                T end = start + static_cast<T>(this_block_size);
+                push_task(std::forward<F>(loop), start, end);
+                start = end;
+            }
         }
     }
 

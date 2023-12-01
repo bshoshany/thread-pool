@@ -156,6 +156,7 @@ public:
             block_size = 1;
             num_blocks = (total_size > 1) ? total_size : 1;
         }
+        blocks_with_extra_task = total_size % num_blocks;
     }
 
     /**
@@ -166,7 +167,19 @@ public:
      */
     [[nodiscard]] T start(const size_t i) const
     {
-        return static_cast<T>(i * block_size) + first_index;
+        T ans = first_index;
+        if (i >= blocks_with_extra_task)
+        {
+            ans += static_cast<T>(
+                    blocks_with_extra_task*(block_size+1) +
+                    (i-blocks_with_extra_task)*block_size
+            );
+        }
+        else
+        {
+            ans += static_cast<T>(i * (block_size+1));
+        }
+        return ans;
     }
 
     /**
@@ -177,7 +190,9 @@ public:
      */
     [[nodiscard]] T end(const size_t i) const
     {
-        return (i == num_blocks - 1) ? index_after_last : (static_cast<T>((i + 1) * block_size) + first_index);
+        return start(i) + static_cast<T>(
+                block_size + (i<blocks_with_extra_task)
+        );
     }
 
     /**
@@ -225,6 +240,11 @@ private:
      * @brief The total number of indices in the range.
      */
     size_t total_size = 0;
+
+    /**
+     * @brief The number of blocks with one extra task
+     */
+    size_t blocks_with_extra_task = 0;
 };
 
 //                                        End class blocks                                       //
