@@ -171,9 +171,9 @@ For maximum performance, it is recommended to compile with all available compile
 
 As an example, to compile the test program `BS_thread_pool_test.cpp` with warnings and optimizations, it is recommended to use the following commands:
 
-* On Linux with GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -pthread -o BS_thread_pool_test`
-* On Linux with Clang: replace `g++` with `clang++`.
-* On Windows with GCC or Clang: replace `-o BS_thread_pool_test` with `-o BS_thread_pool_test.exe` and remove `-pthread`.
+* On Linux with GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -Wuseless-cast -pthread -o BS_thread_pool_test`
+* On Linux with Clang: replace `g++` with `clang++` and remove `-Wuseless-cast`.
+* On Windows with GCC or Clang: replace `-o BS_thread_pool_test` with `-o BS_thread_pool_test.exe` and remove `-pthread` and `-Wuseless-cast`.
 * On Windows with MSVC: `cl BS_thread_pool_test.cpp /std:c++17 /permissive- /O2 /W4 /EHsc /Fo:BS_thread_pool_test.obj /Fe:BS_thread_pool_test.exe`
 
 ## Getting started

@@ -952,8 +952,8 @@ private:
                 const size_t total_size = static_cast<size_t>(index_after_last - first_index);
                 if (num_blocks > total_size)
                     num_blocks = total_size;
-                block_size = static_cast<size_t>(total_size / num_blocks);
-                remainder = static_cast<size_t>(total_size % num_blocks);
+                block_size = total_size / num_blocks;
+                remainder = total_size % num_blocks;
                 if (block_size == 0)
                 {
                     block_size = 1;
