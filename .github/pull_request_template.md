@@ -10,6 +10,10 @@ What does your pull request fix or add to the library?
 
 Have you formatted your code using the `.clang-format` file attached to this project?
 
+**Linting**
+
+Have you linted your code using the `.clang-tidy` file attached to this project?
+
 **Testing**
 
 Have you tested the new code using the provided automated test program `BS_thread_pool_test.cpp` (preferably with the provided multi-compiler test script `BS_thread_pool_test.ps1`) and/or performed any other tests to ensure that the new code works correctly?

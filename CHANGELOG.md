@@ -6,6 +6,7 @@ Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
 * [Version history](#version-history)
+    * [v4.0.0 (2023-12-27)](#v400-2023-12-27)
     * [v3.5.0 (2023-05-25)](#v350-2023-05-25)
     * [v3.4.0 (2023-05-12)](#v340-2023-05-12)
     * [v3.3.0 (2022-08-03)](#v330-2022-08-03)
@@ -26,11 +27,146 @@ GitHub: <https://github.com/bshoshany>
 
 ## Version history
 
+### v4.0.0 (2023-12-27)
+
+* A major new release with numerous changes, additions, fixes, and improvements. Many frequently requested features have been added, and performance has been optimized. Please note that code written using previous releases will need to be modified to work with the new release. The changes needed to migrate to the new API are explicitly indicated below for your convenience.
+* Highlights:
+    * The light thread pool has been removed. However, by default, the thread pool is in "light mode". Optional features that may affect performance must be enabled by defining suitable macros.
+    * This library now ships with two stand-alone header files:
+        * `BS_thread_pool.hpp` contains the main `BS::thread_pool` class and the `BS::multi_future` helper classes, and is the only file needed to use the thread pool itself.
+        * `BS_thread_pool_utils.hpp` contains the additional utility classes `BS::signaller`, `BS::synced_stream`, and `BS::timer`, which are fully independent of the thread pool itself and can be used either with or without it.
+    * It is now possible to assign priorities to tasks. Tasks with higher priorities will be executed first.
+    * Member functions for submitting tasks and loops have been renamed for consistency, e.g. `detach_task()` and `submit_task()`, where the prefix `detach` means no future will be returned and `submit` means a future or `BS::multi_future` will be returned.
+    * There are now two ways to parallelize loops into blocks:
+        * `detach_blocks()` and `submit_blocks()` behave the same as loop parallelization in previous releases, running the loop function once per block.
+        * `detach_loop()` and `submit_loop()` have a simpler syntax, where the loop function is run once per index, so the user doesn't have to manually run the internal loop for each block.
+    * The new member functions `detach_sequence()` and `submit_sequence()` allow submitting a sequence of tasks enumerated by indices.
+    * It is now possible to run an initialization function in each thread before it starts to execute any submitted tasks.
+    * Tasks submitted with `detach_task()` or `submit_task()` can no longer have arguments. Task with arguments must be enclosed inside lambda expressions. This simplifies the API and provides better readability. Tasks can still have return values.
+    * Various ways to obtain information about the threads in the pool have been introduced:
+        * The member function `get_thread_ids()` obtains the unique thread identifiers, and `get_native_handles()` obtains the underlying implementation-defined thread handles.
+        * The new namespace `BS::this_thread` allows obtaining the thread's index in the pool using `BS::this_thread::get_index()` and a pointer to the pool that owns the thread using `BS::this_thread::get_pool()`.
+    * Member functions for waiting for tasks have been renamed for brevity: `wait()`/`wait_for()`/`wait_until()`. In addition, these functions can now optionally throw an exception if the user tries to call them from within a thread of the same pool, which would result in a deadlock.
+    * The first index must now be specified explicitly when parallelizing blocks, loops, and sequences, and it must not be greater than the last index. Also, both indices must now have the same type, or the template parameter should be explicitly specified.
+    * Optimized the way `detach_blocks()`, `submit_blocks()`, `detach_loop()`, and `submit_loop()` split the range of the loop into blocks.
+    * Added a utility class `BS::signaller` to allow simple signalling between threads.
+    * `BS::multi_future<T>` is now a specialization of `std::vector<std::future<T>>` with additional member functions.
+* Breaking changes:
+    * The light thread pool has been removed. The original idea was that the light thread pool will allow the user to sacrifice functionality for increased performance. However, in my testing I found that there was no actual performance benefit to the light thread pool. Therefore, there is no reason to keep it.
+        * However, by default, the thread pool is in "light mode". Optional features that may affect performance due to additional checks or more complicated algorithms must be enabled by defining suitable macros before including the library:
+            * `BS_THREAD_POOL_ENABLE_PAUSE` to enable pausing.
+            * `BS_THREAD_POOL_ENABLE_PRIORITY` to enable task priority.
+            * `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK` to enable wait deadlock checks.
+        * **API migration:**
+            * If you previously used `BS_thread_pool_light.hpp`, simply use `BS_thread_pool.hpp` instead.
+            * If you previously used the pausing feature, define the macro `BS_THREAD_POOL_ENABLE_PAUSE` before including `BS_thread_pool.hpp` to enable it.
+    * Member functions have been renamed for better consistency. Each function has a `detach` variant which does not return a future, and a `submit` variant which does return a future (or a `BS::multi_future`):
+        * `detach_task()` and `submit_task()` for single tasks.
+        * `detach_blocks()` and `submit_blocks()` for loops to be split into blocks, where the loop function is executed once per block and must have an internal loop, as in previous releases.
+        * `detach_loop()` and `submit_loop()` for loops to be split into blocks, where the loop function is executed once per index and the pool takes care of the internal loop.
+        * `detach_sequence()` and `submit_sequence()` for sequences of enumerated tasks.
+        * **API migration:** Use the new names of the functions:
+            * `push_task()` -> `detach_task()`
+            * `submit()` -> `submit_task()`
+            * `push_loop()` -> `detach_blocks()`
+            * `parallelize_loop()` -> `submit_blocks()`
+    * `wait_for_tasks()`, `wait_for_tasks_duration()`, and `wait_for_tasks_until()` have been renamed to `wait()`, `wait_for()`, and `wait_until()` respectively.
+        * **API migration:** Use the new names of the functions:
+            * `wait_for_tasks()` -> `wait()`
+            * `wait_for_tasks_duration()` -> `wait_for()`
+            * `wait_for_tasks_until()` -> `wait_until()`
+    * Functions for parallelizing loops no longer have dedicated overloads for the special case where the first index is 0. These overloads essentially amount to giving the first function argument a default value, which is not allowed in C++, and can be confusing. In addition, indicating the first index explicitly is better for readability.
+        * **API migration:** Add the first index 0 manually as the first argument if it was omitted.
+    * Functions for parallelizing loops no longer allow the last index to be smaller than the first index. Previously, e.g. `detach_blocks(5, 0, ...)` was equivalent to `detach_blocks(0, 5, ...)`. However, this led to confusing results. Since the first argument is the first index and the second argument is the index *after* the last index (i.e. 0 to 5 actually means 0, 1, 2, 3, 4), the user might get the wrong impression that `detach_blocks(5, 0, ...)` will count 5, 4, 3, 2, 1 instead. This option was removed to avoid this confusion.
+        * Sometimes the user might actually want to make a loop that counts down instead of up. This cannot be done by flipping the order of the arguments to e.g. `detach_blocks()` (nor could it be done in previous releases). However, it can be done by simply defining a suitable loop function. For example, if you call `detach_blocks(0, 10, loop, 2)` and define the loop function as `for (T i = 9 - start; i > 9 - end; --i)`, then the first block will count 9, 8, 7, 6, 5 and the second block will count 4, 3, 2, 1, 0.
+        * `detach_loop()`, `submit_loop()`, `detach_sequence()`, and `submit_sequence()` work the same way. The first index must be smaller than the last index, but you can count down by writing a suitable loop or sequence function.
+        * **API migration:** Any loop parallelization that used a first index greater than the last index will work exactly the same after switching the first and second arguments so that the smaller index appears first.
+    * Functions for parallelizing loops no longer accept first and last indices of different types. The reason for allowing this previously was that otherwise, writing something like `detach_blocks(0, x, ...)` where `x` is not an `int` would result in a compilation error, since `0` is by default an `int` and therefore the arguments `0` and `x` have different types. However, this behavior, which used [`std::common_type`](https://en.cppreference.com/w/cpp/types/common_type) to determine the common type of the two indices, sometimes completely messed up the range of the loop. For example, the `std::common_type` of `int` and `unsigned int` is `unsigned int`, which means the loop will only use non-negative indices even if the `int` start index was negative, resulting in an integer overflow.
+        * **API migration:** If you want to invoke e.g. `detach_blocks(0, x, ...)` where `x` is not an `int`, you can either:
+            * Make the `0` have the desired type using a cast or a suffix. For example, if `x` is an `unsigned int`, write `(unsigned int)0` or `0U` instead of `0`.
+            * Specify the template parameter explicitly. For example, if `x` is a `size_t`, write `detach_blocks<size_t>(0, x, ...)`.
+    * `detach_task()` and `submit_task()` no longer accept arguments for the submitted task. Instead, you must enclose the function in a [lambda expression](https://en.cppreference.com/w/cpp/language/lambda). In other words, instead of `detach_task(task, args...)` you should write `detach_task([] { task(args...); })`, indicating in the capture list `[]` whether to capture the task itself, and each of the arguments, by value or reference. Please see `README.md` for examples. This was changed for the following reasons:
+        1. Consistency with `detach_blocks()` and `submit_blocks()`, as well as the new `detach_loop()`, `submit_loop()`, `detach_sequence()`, and `submit_sequence()`, which do not accept function arguments either.
+        2. In my own multithreaded projects, I find that I almost always need the task to have access to variables in the local scope. This is much simpler, easier, and more concise to do with a lambda capture list, especially an implicit capture `[=]` or `[&]`, than by defining a function that takes arguments and then passing these arguments.
+        3. Similarly, I find that I mostly submit tasks defined as a lambda on the spot, rather than creating them as separate functions, because it's faster to code and makes it clear exactly what the task does without having to look elsewhere.
+        4. When users post issues to this repository asking for help with their own code that uses the thread pool, the solution often turns out to be "just wrap that in a lambda". Such issues can be avoided if lambdas must be used to begin with.
+        5. Submitting member functions, which previously required the awkward syntax `detach_task(&class::function, &object, args...)`, can now be achieved with the much simpler and more readable syntax `detach_task([] { object.function(args...); })` with the appropriate captures.
+        6. Passing arguments by reference, which previously required using [`std::ref`](https://en.cppreference.com/w/cpp/utility/functional/ref), e.g. `detach_task(task, std::ref(arg))`, can now be achieved with the much simpler and more readable syntax `detach_task([&arg] { task(arg); })`.
+        7. The new syntax allows specifying the priority of the task easily, as the second argument - otherwise, it would have been hard to distinguish the priority from a task argument, making the API more complicated and confusing. This syntax will also permit adding additional arguments to the member functions as needed in the future.
+        * **API migration:** Enclose all tasks with arguments inside a lambda expression. All submitted tasks must have no arguments, but they can still have return values.
+            * Alternatively, [`std::bind`](https://en.cppreference.com/w/cpp/utility/functional/bind) can also be used, if the old syntax is preferred to a lambda. Just wrap it around the task and its arguments: instead of `detach_task(task, args...)`, write `detach_task(std::bind(task, args...))`. This achieves the same effect, and can be used to easily convert v3.x.x code to v4.0.0 using a simple regular expression search and replace:
+                * `push_task\((.*?)\)` -> `detach_task(std::bind($1))`
+                * `submit\((.*?)\)` -> `submit_task(std::bind($1))`
+    * `BS::synced_stream` and `BS::timer` have been moved to `BS_thread_pool_utils.hpp`.
+        * **API migration:** Include the new header file if either of these utility classes are used.
+* `BS_thread_pool.hpp` new features:
+    * A new optional feature, enabled by defining the macro `BS_THREAD_POOL_ENABLE_PRIORITY`, allows assigning priority to tasks. The priority is a number of type `BS::priority_t`, which is a signed 16-bit integer, so it can have any value between -32,768 and 32,767. The tasks will be executed in priority order from highest to lowest.
+        * To assign a priority to a task, add the priority as the last argument to any of the `detach` or `submit` functions. If the priority is not specified, the default value will be 0.
+        * The namespace `BS::pr` contains some pre-defined priorities for users who wish to avoid magic numbers and enjoy better future-proofing. In order of decreasing priority, the pre-defined priorities are: `BS::pr::highest`, `BS::pr::high`, `BS::pr::normal`, `BS::pr::low`, and `BS::pr::lowest`.
+        * Please see `README.md` for more information, including performance considerations.
+    * The new member functions `detach_loop()` and `submit_loop()` facilitate loop parallelization without having to worry about internal loops in the loop function. In previous releases, the loop function had to be of the form `[](T start, T end) { for (T i = start; i < end; ++i) loop(i); }`. This behavior has been preserved in `detach_blocks()` and `submit_blocks()`. However, the new `detach_loop()` and `submit_loop()` allow much simpler loop functions of the form `[](T i) { loop(i) }`, greatly simplifying the interface.
+        * Performance-wise, due to fewer function calls, `detach_blocks()` and `submit_blocks()` are generally faster. However, the difference is usually not significant, and with compiler optimizations there may be no difference at all. In any case, `detach_loop()` and `submit_loop()` are provided as convenience functions, but performance-critical applications can stick with `detach_blocks()` and `submit_blocks()`.
+    * The new member functions `detach_sequence()` and `submit_sequence()` facilitate submitting a sequence of tasks enumerated by indices. This is a bit similar to `detach_loop()` and `submit_loop()`, except that the range of indices is not split into blocks with each block containing a smaller range of indices. Instead, there is exactly one task per index. This can be used, for example, to submit a sequence of tasks with each one independently processing a single array element. `detach_sequence()` does not return a future, while `submit_sequence()` returns a `BS::multi_future`.
+    * It is now possible to run an initialization function in each thread before it starts to execute any submitted tasks. The function must take no arguments and have no return value. It will only be executed exactly once, when the thread is first constructed. It can be passed as an argument to the constructor or to `reset()`. See [#104](https://github.com/bshoshany/thread-pool/issues/104), [#105](https://github.com/bshoshany/thread-pool/pull/105), [#113](https://github.com/bshoshany/thread-pool/issues/113), and [#119](https://github.com/bshoshany/thread-pool/issues/119).
+    * Added a member function `get_thread_ids()` which returns a vector containing the unique identifiers for each of the pool's threads, as obtained by [`std::thread::get_id()`](https://en.cppreference.com/w/cpp/thread/get_id). See [#126](https://github.com/bshoshany/thread-pool/issues/126).
+    * A new optional feature, enabled by defining the macro `BS_THREAD_POOL_ENABLE_NATIVE_HANDLES`, adds a member function `get_native_handles()` which returns a vector containing the underlying implementation-defined thread handles for each of the pool's threads. These can then be used in an implementation-specific way to manage the threads at the OS level; however, note that this will generally **not** be portable code. See [#122](https://github.com/bshoshany/thread-pool/issues/122).
+        * This feature is disabled by default since it uses [std::thread::native_handle()](https://en.cppreference.com/w/cpp/thread/thread/native_handle), which is in the C++ standard library, but is **not** guaranteed to be present on all systems.
+    * A new namespace `BS::this_thread` was created to provide functionality similar to `std::this_thread`.
+        * `BS::this_thread::get_index()` can be used to get the index of the current thread. If this thread belongs to a `BS::thread_pool` object, it will have an index from 0 to `BS::thread_pool::get_thread_count() - 1`. Otherwise, for example if this thread is the main thread or an independent [`std::thread`](https://en.cppreference.com/w/cpp/thread/thread), [`std::nullopt`](https://en.cppreference.com/w/cpp/utility/optional/nullopt) will be returned.
+        * `BS::this_thread::get_pool()` can be used to get the pointer to the thread pool that owns the current thread. If this thread belongs to a `BS::thread_pool` object, a pointer to that object will be returned. Otherwise, `std::nullopt` will be returned.
+        * Note that both functions return an [`std::optional`](https://en.cppreference.com/w/cpp/utility/optional) object.
+    * `BS::multi_future<T>` is now defined as a specialization of `std::vector<std::future<T>>`. This means that all of the member functions that can be used on an [`std::vector`](https://en.cppreference.com/w/cpp/container/vector) can also be used on a `BS::multi_future`. For example, it is now possible to use a range-based `for` loop with a `BS::multi_future` object, since it has iterators.
+        * In addition to inherited member functions, `BS::multi_future` has the following specialized member functions, most of which are new in this release: `get()`, `ready_count()`, `valid()`, `wait()`, `wait_for()`, and `wait_until()`. Please see `README.md` for more information. See also [#128](https://github.com/bshoshany/thread-pool/issues/128).
+    * A new optional feature, enabled by defining the macro `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK`, allows `wait()`, `wait_for()`, and `wait_until()` to check whether the user tried to call them from within a thread of the same pool, which would result in a deadlock. If so, they will throw the exception `BS::thread_pool::wait_deadlock` instead of waiting.
+* `BS_thread_pool_utils.hpp`:
+    * The utility classes `BS::synced_stream` and `BS::timer` now reside in this header file instead of the main one.
+    * `BS::timer` has a new member function, `current_ms()`, which can be used to obtain the number of milliseconds that have elapsed so far, but keep the timer ticking.
+    * The new utility class `BS::signaller` allows simple signalling between threads. It can be used to make one or more threads wait, using the `wait()` member function. When another thread uses the `ready()` member function, all waiting threads stop waiting. This class is really just a convenient wrapper around [`std::promise`](https://en.cppreference.com/w/cpp/thread/promise), which contains both the promise and its future.
+* `BS_thread_pool.hpp` bug fixes and minor changes:
+    * Optimized locking in the worker function. This should result in increased performance.
+    * Optimized the way `detach_blocks()`, `submit_blocks()`, `detach_loop()`, and `submit_loop()` split the range of the loop into blocks. All blocks are now guaranteed to have one of two sizes, differing by 1, with the larger blocks always first. See [#96](https://github.com/bshoshany/thread-pool/issues/96).
+        * For example, in previous releases, 100 indices were split into 15 blocks as 14 blocks of size 6 and one additional block of size 16, which was suboptimal. Now they are split into 10 blocks of size 7 and 5 blocks of size 6, which means the tasks are as evenly distributed as possible.
+    * Fixed a bug that caused paused pools to have high idle CPU usage if pausing was used. See [#120](https://github.com/bshoshany/thread-pool/issues/120).
+    * The worker now destructs the task object as soon as it finishes executing. See [#124](https://github.com/bshoshany/thread-pool/issues/124) and [#129](https://github.com/bshoshany/thread-pool/pull/129).
+    * Added Markdown inline code formatting in all comments whenever applicable, which makes the comments look nicer when displayed as a tooltip in [Visual Studio Code](https://code.visualstudio.com/) or other supporting IDEs.
+    * The `BS::thread_pool::blocks` helper class has been moved into the main thread pool class, and now returns a degenerate object (zero blocks) if `index_after_last <= first_index`.
+* `BS_thread_pool_test.cpp`:
+    * Removed tests for the light thread pool.
+    * Added/modified tests for all new/changed features.
+    * Many of the previous tests have been simplified and optimized.
+    * The program now takes command line arguments:
+        * `help`: Show a help message and exit.
+        * `log`: Create a log file.
+        * `tests`: Perform standard tests.
+        * `deadlock` Perform long deadlock tests.
+        * `benchmarks`: Perform benchmarks.
+        * If no options are entered, the default is: `log tests benchmarks`.
+    * By default, the test program enables all the optional features by defining the suitable macros, so it can test them. However, if the macro `BS_THREAD_POOL_LIGHT_TEST` is defined during compilation, the optional features will not be tested.
+    * Instead of using a pre-defined list to specify the number of loop blocks to try in the benchmarks, the program now simply keeps increasing the number of blocks until it finds the optimal value. Often, the optimal number of blocks is much higher than the number of hardware threads, but if the number is too high it will result in diminishing returns.
+    * `check_loop_no_return()` now checks that the loop modifies all the indices exactly once, to detect cases where an index has been modified more than once, e.g. if the same loop index was erroneously placed in more than one block.
+    * Instead of defining `_CRT_SECURE_NO_WARNINGS`, the program now uses [`localtime_s`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-s-localtime32-s-localtime64-s) instead of [`std::localtime`](https://en.cppreference.com/w/cpp/chrono/c/localtime) if MSVC is detected to avoid generating a warning.
+    * On macOS, the test program will exit with [`std::terminate()`](https://en.cppreference.com/w/cpp/error/terminate) instead of [`std::quick_exit()`](https://en.cppreference.com/w/cpp/utility/program/quick_exit) if any tests failed. This is because macOS does not implement `std::quick_exit()` for some reason. Note that as a result, the number of failed tests cannot be returned by the program on macOS. Unfortunately, [`std::exit()`](https://en.cppreference.com/w/cpp/utility/program/exit) cannot be used here, as it might get stuck if a deadlock occurs. See [#106](https://github.com/bshoshany/thread-pool/pull/106)
+    * The log file now uses the name of the executable file, followed by the date and time, so it's easy to distinguish between log files generated by different builds of the test (since the test script names them based on the compiler used). Also, the program now checks if the log file failed to open for some reason, and writes only to the standard output in that case.
+    * The benchmarks now display a progress bar.
+    * The test program will now detect the OS and compiler used.
+* `BS_thread_pool_test.ps1`:
+    * The script will compile and run a light version of the test, with no optional features enabled, in addition to the main test, for each compiler.
+    * The source and build folders will now be determined relative to the script folder, to ensure that the script works no matter which folder it is executed from.
+    * The script now checks that the include files `BS_thread_pool.hpp` and `BS_thread_pool_utils.hpp` are present before attempting to compile the test program.
+* `README.md`:
+    * Added/modified documentation for all new/changed features.
+    * Revised many of the existing examples and explanations.
+    * Added a complete library reference at the end of the documentation.
+    * Added instructions for installing the package using Meson and CMake with CPM. The installation instructions with various package managers and build systems were moved to the end, before the reference.
+* Miscellaneous:
+    * A `.clang-tidy` file is now included, with all the checks that are enabled in this project. The pull request template has been updated to suggest that authors lint their code using this file before submitting the pull request.
+* This release is dedicated to my wife (since December 1, 2023), Pauline. Her endless love, support, and encouragement have been a great source of motivation for working on this and other projects. I am so lucky and honored to [`my_future.share()`](https://en.cppreference.com/w/cpp/thread/future/share) with her ❤️
+
 ### v3.5.0 (2023-05-25)
 
 * `BS_thread_pool.hpp` and `BS_thread_pool_light.hpp`:
     * Added a new member function, `purge()`, to the full (non-light) thread pool. This function purges all the tasks waiting in the queue. Tasks that are currently running will not be affected, but any tasks still waiting in the queue will be removed and will never be executed by the threads. Please note that there is no way to restore the purged tasks.
-    * Fix a bug which caused `wait_for_tasks()` to only block the first thread that called it. Now it blocks every thread that calls it, which is the expected behavior. In addition, all related deadlock have now been completely resolved. This also applies to the variants `wait_for_tasks_duration()` and `wait_for_tasks_until()` in the non-light version. See [#110](https://github.com/bshoshany/thread-pool/pull/110).
+    * Fixed a bug which caused `wait_for_tasks()` to only block the first thread that called it. Now it blocks every thread that calls it, which is the expected behavior. In addition, all related deadlock have now been completely resolved. This also applies to the variants `wait_for_tasks_duration()` and `wait_for_tasks_until()` in the non-light version. See [#110](https://github.com/bshoshany/thread-pool/pull/110).
         * Note: You should never call `wait_for_tasks()` from within a thread of the same thread pool, as that will cause it to wait forever! This fix is relevant for situations when `wait_for_tasks()` is called from an auxiliary `std::thread` or a separate thread pool.
     * `push_task()` and `submit()` now avoid creating unnecessary copies of the function object. This should improve performance, especially if large objects are involved. See [#90](https://github.com/bshoshany/thread-pool/pull/90).
     * Optimized the way condition variables are used by the thread pool class. Shared variables are now modified while owning the mutex, but condition variables are notified after the mutex is released, if possible. See [#84](https://github.com/bshoshany/thread-pool/pull/84).
@@ -65,7 +201,7 @@ GitHub: <https://github.com/bshoshany>
     * Two new member functions have been added to the non-light version: `wait_for_tasks_duration()` and `wait_for_tasks_until()`. They allow waiting for the tasks to complete, but with a timeout. `wait_for_tasks_duration()` will stop waiting after the specified duration has passed, and `wait_for_tasks_until()` will stop waiting after the specified time point has been reached.
     * Renamed `BS_THREAD_POOL_VERSION` in `BS_thread_pool_light.hpp` to `BS_THREAD_POOL_LIGHT_VERSION` and removed the `[light]` tag. This allows including both header files in the same program in case we want to use both the light and non-light thread pools simultaneously.
 * `BS_thread_pool_test.cpp` and `BS_thread_pool_light_test.cpp`:
-    * Fixed an issue that caused a compilation error when using MSVC and including `Windows.h`. See [#72](https://github.com/bshoshany/thread-pool/pull/72).
+    * Fixed an issue that caused a compilation error when using MSVC and including `windows.h`. See [#72](https://github.com/bshoshany/thread-pool/pull/72).
     * The number and size of the vectors in the performance test (`BS_thread_pool_test.cpp` only) are now guaranteed to be multiples of the number of threads, for optimal performance.
     * In `count_unique_threads()`, moved the condition variables and mutexes to the function scope to prevent cluttering the global scope.
     * Three new tests have been added to `BS_thread_pool_test.cpp` to check the deadlocks issue that were resolved in this release (see above). The tests rely on the new wait for tasks with timeout feature, so they are not available in the light version.
@@ -117,7 +253,7 @@ GitHub: <https://github.com/bshoshany>
         * Instead of generating random vectors using `std::mersenne_twister_engine`, which proved to be inconsistent across different compilers and systems, the test now generates each element via an arbitrarily-chosen numerical operation. In my testing, this provided much more consistent results.
         * Instead of using a hard-coded vector size, a suitable vector size is now determined dynamically at runtime.
         * Instead of using `parallelize_loop()`, the test now uses the new `push_loop()` function to squeeze out a bit more performance.
-        * Instead of setting the test parameters to achieve a fixed single-threaded mean execution time of 300 ms, the test now aims to achieve a fixed multi-threaded mean execution time of 50 ms when the number of blocks is equal to the number of threads. This allows for more reliable results on very fast CPUs with a very large number of threads, where the mean execution time when using all the threads could previously be below a statistically significant value.
+        * Instead of setting the test parameters to achieve a fixed single-threaded mean execution time of 300 ms, the test now aims to achieve a fixed multithreaded mean execution time of 50 ms when the number of blocks is equal to the number of threads. This allows for more reliable results on very fast CPUs with a very large number of threads, where the mean execution time when using all the threads could previously be below a statistically significant value.
         * The number of vectors is now restricted to be a multiple of the number of threads, so that the blocks are always all of the same size.
 * `README.md`:
     * Added instructions and examples for the new features described above.
@@ -129,7 +265,7 @@ GitHub: <https://github.com/bshoshany>
     * Fixed an issue where `wait_for_tasks()` would sometimes get stuck if `push_task()` was executed immediately before `wait_for_tasks()`.
     * Both the thread pool constructor and the `reset()` member function now determine the number of threads to use in the pool as follows. If the parameter is a positive number, then the pool will be created with this number of threads. If the parameter is non-positive, or a parameter was not supplied, then the pool will be created with the total number of hardware threads available, as obtained from `std::thread::hardware_concurrency()`. If the latter returns a non-positive number for some reason, then the pool will be created with just one thread. See [#51](https://github.com/bshoshany/thread-pool/issues/51) and [#52](https://github.com/bshoshany/thread-pool/issues/52).
     * Added the `[[nodiscard]]` attribute to classes and class members, in order to warn the user when accidentally discarding an important return value, such as a future or the return value of a function with no useful side-effects. For example, if you use `submit()` and don't save the future it returns, the compiler will now generate a warning. (If a future is not needed, then you should use `push_task()` instead.)
-    * Removed the `explicit` specifier from all constructors, as it prevented the default constructor from being used with static class members. See [#48](https://github.com/bshoshany/thread-pool/issues/48>).
+    * Removed the `explicit` specifier from all constructors, as it prevented the default constructor from being used with static class members. See [#48](https://github.com/bshoshany/thread-pool/issues/48).
 * `BS_thread_pool_test.cpp`:
     * Improved `count_unique_threads()` using condition variables, to ensure that each thread in the pool runs at least one task regardless of how fast it takes to run the tasks.
     * When appropriate, `check()` now explicitly reports what the obtained result was and what it was expected to be.
@@ -174,8 +310,8 @@ GitHub: <https://github.com/bshoshany>
     * Added a new test for `parallelize_loop()` with a return value.
     * Improved some of the tests to make them more reliable. For example, `count_unique_threads()` now uses futures (stored in a `BS::multi_future<void>` object).
     * The program now uses `std::vector` instead of matrices, for both consistency checks and benchmarks, in order to simplify the code and considerably reduce its length.
-    * The benchmarks have been simplified. There's now only one test: filling a specific number of vectors of fixed size with random values. This may be replaced with something more practical in a future released, but at least on the systems I've tested on, it does demonstrate a very significant multi-threading speedup.
-    * In addition to multi-threaded tests with different numbers of tasks, the benchmark now also includes a single-threaded test. This allows for more accurate benchmarks compared to previous versions, as the (slight) parallelization overhead is now taken into account when calculating the maximum speedup.
+    * The benchmarks have been simplified. There's now only one test: filling a specific number of vectors of fixed size with random values. This may be replaced with something more practical in a future released, but at least on the systems I've tested on, it does demonstrate a very significant multithreading speedup.
+    * In addition to multithreaded tests with different numbers of tasks, the benchmark now also includes a single-threaded test. This allows for more accurate benchmarks compared to previous versions, as the (slight) parallelization overhead is now taken into account when calculating the maximum speedup.
     * The program decides how many vectors to use for benchmarking by testing how many are needed to reach a target duration in the single-threaded test. This ensures that the test takes approximately the same amount of time on different systems, and is thus more consistent and portable.
     * Miscellaneous minor optimizations and style improvements.
 * Changes to `README.md`:
