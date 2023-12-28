@@ -1,8 +1,8 @@
 /**
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 4.0.0
- * @date 2023-12-27
+ * @version 4.0.1
+ * @date 2023-12-28
  * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
@@ -48,6 +48,19 @@
 // Include the header files for the thread pool library and its utilities.
 #include "BS_thread_pool.hpp"
 #include "BS_thread_pool_utils.hpp"
+
+// Macros indicating the version of the thread pool test program.
+#define BS_THREAD_POOL_TEST_VERSION_MAJOR 4
+#define BS_THREAD_POOL_TEST_VERSION_MINOR 0
+#define BS_THREAD_POOL_TEST_VERSION_PATCH 1
+
+#if (BS_THREAD_POOL_TEST_VERSION_MAJOR != BS_THREAD_POOL_VERSION_MAJOR || BS_THREAD_POOL_TEST_VERSION_MINOR != BS_THREAD_POOL_VERSION_MINOR || BS_THREAD_POOL_TEST_VERSION_PATCH != BS_THREAD_POOL_VERSION_PATCH)
+#error The versions of BS_thread_pool_test.cpp and BS_thread_pool.hpp do not match. Aborting compilation.
+#endif
+
+#if (BS_THREAD_POOL_TEST_VERSION_MAJOR != BS_THREAD_POOL_UTILS_VERSION_MAJOR || BS_THREAD_POOL_TEST_VERSION_MINOR != BS_THREAD_POOL_UTILS_VERSION_MINOR || BS_THREAD_POOL_TEST_VERSION_PATCH != BS_THREAD_POOL_UTILS_VERSION_PATCH)
+#error The versions of BS_thread_pool_test.cpp and BS_thread_pool_utils.hpp do not match. Aborting compilation.
+#endif
 
 using int64 = std::int_fast64_t;
 using std::size_t;
@@ -2248,8 +2261,9 @@ void show_intro()
     dual_println("GitHub: https://github.com/bshoshany/thread-pool");
     dual_println();
 
-    dual_println("Thread pool library version is ", BS_THREAD_POOL_VERSION, ".");
-    dual_println("Hardware concurrency is ", std::thread::hardware_concurrency(), ".");
+    dual_println("Thread pool library version is ", BS_THREAD_POOL_VERSION_MAJOR, '.', BS_THREAD_POOL_VERSION_MINOR, '.', BS_THREAD_POOL_VERSION_PATCH, '.');
+    dual_println("Thread pool utilities library version is ", BS_THREAD_POOL_UTILS_VERSION_MAJOR, '.', BS_THREAD_POOL_UTILS_VERSION_MINOR, '.', BS_THREAD_POOL_UTILS_VERSION_PATCH, '.');
+    dual_println("Hardware concurrency is ", std::thread::hardware_concurrency(), '.');
     dual_println();
 
     dual_print("Native handles are ");
@@ -2279,8 +2293,8 @@ void show_intro()
 
     dual_println();
 
-    dual_println("Detected OS: ", detect_os(), ".");
-    dual_println("Detected compiler: ", detect_compiler(), ".");
+    dual_println("Detected OS: ", detect_os(), '.');
+    dual_println("Detected compiler: ", detect_compiler(), '.');
     dual_println();
 
     dual_println("Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!");

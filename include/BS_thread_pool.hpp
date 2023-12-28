@@ -3,8 +3,8 @@
 /**
  * @file BS_thread_pool.hpp
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 4.0.0
- * @date 2023-12-27
+ * @version 4.0.1
+ * @date 2023-12-28
  * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains the main thread pool class and some additional classes and definitions. No other files are needed in order to use the thread pool itself.
@@ -31,8 +31,10 @@
  * @brief A namespace used by Barak Shoshany's projects.
  */
 namespace BS {
-// A macro containing the version of the thread pool library.
-#define BS_THREAD_POOL_VERSION "v4.0.0 (2023-12-27)"
+// Macros indicating the version of the thread pool library.
+#define BS_THREAD_POOL_VERSION_MAJOR 4
+#define BS_THREAD_POOL_VERSION_MINOR 0
+#define BS_THREAD_POOL_VERSION_PATCH 1
 
 class thread_pool;
 
@@ -138,12 +140,12 @@ namespace this_thread {
     /**
      * @brief A `thread_local` object used to obtain information about the index of the current thread.
      */
-    thread_local thread_info_index get_index;
+    inline thread_local thread_info_index get_index;
 
     /**
      * @brief A `thread_local` object used to obtain information about the thread pool that owns the current thread.
      */
-    thread_local thread_info_pool get_pool;
+    inline thread_local thread_info_pool get_pool;
 } // namespace this_thread
 
 /**
@@ -952,8 +954,8 @@ private:
                 const size_t total_size = static_cast<size_t>(index_after_last - first_index);
                 if (num_blocks > total_size)
                     num_blocks = total_size;
-                block_size = static_cast<size_t>(total_size / num_blocks);
-                remainder = static_cast<size_t>(total_size % num_blocks);
+                block_size = total_size / num_blocks;
+                remainder = total_size % num_blocks;
                 if (block_size == 0)
                 {
                     block_size = 1;

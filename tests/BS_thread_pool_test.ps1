@@ -2,7 +2,7 @@
 
 # BS_thread_pool_test.ps1
 # By Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
-# v4.0.0, 2023-12-27
+# v4.0.1, 2023-12-28
 # Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
 #
 # BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This script compiles and runs the bundled test program with different compilers.
@@ -119,10 +119,10 @@ $ExePrefix = 'BS_thread_pool_test_'
 
 $Executables = @()
 
-Function Build-ClangGCC([String] $Compiler, [String] $ExeSuffix, [String] $Macros = '')
+Function Build-ClangGCC([String] $Compiler, [String] $ExeSuffix, [String] $ExtraFlags = '')
 {
     $FullExe = Join-Path $BuildFolder "$ExePrefix$ExeSuffix$Extension"
-    $Command = "$Compiler $SourceFile$PThread -I../include -std=c++17 -O3 -march=native -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -o $FullExe $Macros"
+    $Command = "$Compiler $SourceFile$PThread -I../include -std=c++17 -O3 -march=native -Wall -Wextra -Wconversion -Wsign-conversion -Wpedantic -Weffc++ -Wshadow -o $FullExe $ExtraFlags"
     Write-Command $Command
     Invoke-Expression $Command
     If ($LASTEXITCODE)
@@ -153,8 +153,8 @@ Write-Host
 If (Get-Command 'g++' -ErrorAction SilentlyContinue)
 {
     Write-Text 'Compiling with GCC...'
-    Build-ClangGCC 'g++' 'gcc'
-    Build-ClangGCC 'g++' 'gcc_light' '-DBS_THREAD_POOL_LIGHT_TEST'
+    Build-ClangGCC 'g++' 'gcc' '-Wuseless-cast'
+    Build-ClangGCC 'g++' 'gcc_light' '-Wuseless-cast -DBS_THREAD_POOL_LIGHT_TEST'
 }
 Else
 {
@@ -163,12 +163,12 @@ Else
 
 Write-Host
 
-Function Build-MSVC([String] $ExeSuffix, [String] $Macros = '')
+Function Build-MSVC([String] $ExeSuffix, [String] $ExtraFlags = '')
 {
     $MSVCName = "$ExePrefix$ExeSuffix"
     $FullExe = Join-Path $BuildFolder "$MSVCName$Extension"
     $FullObj = Join-Path $BuildFolder "$MSVCName.obj"
-    $Env:BS_THREAD_POOL_MSVC_COMMAND = "cl $SourceFile /I../include /std:c++17 /permissive- /O2 /W4 /EHsc /Fe:$FullExe /Fo:$FullObj $Macros"
+    $Env:BS_THREAD_POOL_MSVC_COMMAND = "cl $SourceFile /I../include /std:c++17 /permissive- /O2 /W4 /EHsc /Fe:$FullExe /Fo:$FullObj $ExtraFlags"
     Write-Command $Env:BS_THREAD_POOL_MSVC_COMMAND
     pwsh -Command {
         $CurrentDir = Get-Location

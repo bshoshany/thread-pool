@@ -19,7 +19,7 @@ Email: <baraksh@gmail.com>\
 Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
-This is the complete documentation for v4.0.0 of the library, released on 2023-12-27.
+This is the complete documentation for v4.0.1 of the library, released on 2023-12-28.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
@@ -220,19 +220,25 @@ It is generally unnecessary to change the number of threads in the pool after it
 
 ### Finding the version of the library
 
-If desired, the version of this library may be read during compilation time from the macro `BS_THREAD_POOL_VERSION`. The value will be a string containing the version number and release date. For example:
+If desired, the version of this library may be read during compilation time from the following three macros:
 
-```cpp
-std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION << ".\n";
+* `BS_THREAD_POOL_VERSION_MAJOR` - indicates the major version.
+* `BS_THREAD_POOL_VERSION_MINOR` - indicates the minor version.
+* `BS_THREAD_POOL_VERSION_PATCH` - indicates the patch version.
+
+ ```cpp
+std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION_MAJOR << '.' << BS_THREAD_POOL_VERSION_MINOR << '.' << BS_THREAD_POOL_VERSION_PATCH << ".\n";
 ```
 
 Sample output:
 
 ```none
-Thread pool library version is v4.0.0 (2023-12-27).
+Thread pool library version is 4.0.1.
 ```
 
-This can be used, for example, to allow the same code to work with several incompatible versions of the library.
+This can be used, for example, to allow the same code base to work with several incompatible versions of the library using `#if` directives.
+
+**Note:** This feature is only available starting with v4.0.1. Earlier releases of this library do not define these macros.
 
 ## Submitting tasks to the queue
 
@@ -948,7 +954,13 @@ Aside from using `BS::multi_future<T>` to track the execution of parallelized lo
 
 ## Utility classes
 
-The optional header file `BS_thread_pool_utils.hpp` contains several useful utility classes. These are not necessary for using the thread pool itself; `BS_thread_pool.hpp` is the only header file required. However, the utility classes can make writing multithreading code more convenient. The version of the utilities header file can be found by checking the macro `BS_THREAD_POOL_UTILS_VERSION`.
+The optional header file `BS_thread_pool_utils.hpp` contains several useful utility classes. These are not necessary for using the thread pool itself; `BS_thread_pool.hpp` is the only header file required. However, the utility classes can make writing multithreading code more convenient.
+
+As with [the main header file](#finding-the-version-of-the-library), the version of the utilities header file can be found by checking three macros:
+
+* `BS_THREAD_POOL_UTILS_VERSION_MAJOR` - indicates the major version.
+* `BS_THREAD_POOL_UTILS_VERSION_MINOR` - indicates the minor version.
+* `BS_THREAD_POOL_UTILS_VERSION_PATCH` - indicates the patch version.
 
 ### Synchronizing printing to a stream with `BS::synced_stream`
 
@@ -1640,11 +1652,11 @@ BS::thread_pool pool(1);
 
 int main()
 {
-    pool.detach_task( [] { sync_out.println("This task will execute third."); }, BS::pr::normal);
-    pool.detach_task( [] { sync_out.println("This task will execute fifth."); }, BS::pr::lowest);
-    pool.detach_task( [] { sync_out.println("This task will execute second."); }, BS::pr::high);
-    pool.detach_task( [] { sync_out.println("This task will execute first."); }, BS::pr::highest);
-    pool.detach_task( [] { sync_out.println("This task will execute fourth."); }, BS::pr::low);
+    pool.detach_task([] { sync_out.println("This task will execute third."); }, BS::pr::normal);
+    pool.detach_task([] { sync_out.println("This task will execute fifth."); }, BS::pr::lowest);
+    pool.detach_task([] { sync_out.println("This task will execute second."); }, BS::pr::high);
+    pool.detach_task([] { sync_out.println("This task will execute first."); }, BS::pr::highest);
+    pool.detach_task([] { sync_out.println("This task will execute fourth."); }, BS::pr::low);
 }
 ```
 
@@ -1771,7 +1783,7 @@ If you are using the [Conan](https://conan.io/) C/C++ package manager, you can e
 
 ```ini
 [requires]
-bshoshany-thread-pool/4.0.0
+bshoshany-thread-pool/4.0.1
 ```
 
 To update the package to the latest version, simply change the version number. Please refer to [this package's page on ConanCenter](https://conan.io/center/recipes/bshoshany-thread-pool) for more information.
@@ -1798,7 +1810,7 @@ If you are using [CMake](https://cmake.org/), you can install `BS::thread_pool` 
 CPMAddPackage(
     NAME BS_thread_pool
     GITHUB_REPOSITORY bshoshany/thread-pool
-    VERSION 4.0.0)
+    VERSION 4.0.1)
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
 ```
@@ -1833,7 +1845,7 @@ include(${CPM_DOWNLOAD_LOCATION})
 CPMAddPackage(
     NAME BS_thread_pool
     GITHUB_REPOSITORY bshoshany/thread-pool
-    VERSION 4.0.0)
+    VERSION 4.0.1)
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
 add_executable(my_project main.cpp)
