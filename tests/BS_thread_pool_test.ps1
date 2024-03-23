@@ -1,11 +1,15 @@
 #!/usr/bin/env pwsh
 
-# BS_thread_pool_test.ps1
-# By Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
-# v4.0.1, 2023-12-28
-# Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
-#
-# BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This script compiles and runs the bundled test program with different compilers.
+<#
+.SYNOPSIS
+BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library by Barak Shoshany (baraksh@gmail.com) (https://baraksh.com) v4.1.0 (2024-03-22)
+.DESCRIPTION
+This script compiles and runs the bundled test program with different compilers.
+.NOTES
+Copyright (c) 2024 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
+.LINK
+https://github.com/bshoshany/thread-pool
+#>
 
 Set-StrictMode -Version Latest
 

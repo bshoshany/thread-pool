@@ -1,9 +1,9 @@
 /**
  * @file BS_thread_pool_test.cpp
- * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 4.0.1
- * @date 2023-12-28
- * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @author Barak Shoshany (baraksh@gmail.com) (https://baraksh.com)
+ * @version 4.1.0
+ * @date 2024-03-22
+ * @copyright Copyright (c) 2024 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
  */
@@ -25,7 +25,6 @@
 #include <mutex>       // std::mutex, std::scoped_lock
 #include <random>      // std::mt19937_64, std::random_device, std::uniform_int_distribution
 #include <sstream>     // std::ostringstream
-#include <stdexcept>   // std::runtime_error
 #include <string>      // std::string, std::to_string
 #include <string_view> // std::string_view
 #include <thread>      // std::this_thread, std::thread
@@ -33,16 +32,21 @@
 #include <utility>     // std::as_const, std::forward, std::move, std::pair
 #include <vector>      // std::vector
 
-#if defined(__APPLE__)
-#include <exception> // std::terminate
+// By default, the test program enables all the optional features by defining the suitable macros, so it can test them. However, if the macro `BS_THREAD_POOL_LIGHT_TEST` is defined during compilation, the optional features will not be tested, and in addition, exception handling will be disabled.
+#ifndef BS_THREAD_POOL_LIGHT_TEST
+    #define BS_THREAD_POOL_ENABLE_NATIVE_HANDLES
+    #define BS_THREAD_POOL_ENABLE_PAUSE
+    #define BS_THREAD_POOL_ENABLE_PRIORITY
+    #define BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
+#else
+    #define BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
 #endif
 
-// By default, the test program enables all the optional features by defining the suitable macros, so it can test them. However, if the macro `BS_THREAD_POOL_LIGHT_TEST` is defined during compilation, the optional features will not be tested.
-#ifndef BS_THREAD_POOL_LIGHT_TEST
-#define BS_THREAD_POOL_ENABLE_NATIVE_HANDLES
-#define BS_THREAD_POOL_ENABLE_PAUSE
-#define BS_THREAD_POOL_ENABLE_PRIORITY
-#define BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
+    #include <stdexcept>     // std::runtime_error
+    #if defined(__APPLE__)
+        #include <exception> // std::terminate
+    #endif
 #endif
 
 // Include the header files for the thread pool library and its utilities.
@@ -51,15 +55,15 @@
 
 // Macros indicating the version of the thread pool test program.
 #define BS_THREAD_POOL_TEST_VERSION_MAJOR 4
-#define BS_THREAD_POOL_TEST_VERSION_MINOR 0
-#define BS_THREAD_POOL_TEST_VERSION_PATCH 1
+#define BS_THREAD_POOL_TEST_VERSION_MINOR 1
+#define BS_THREAD_POOL_TEST_VERSION_PATCH 0
 
 #if (BS_THREAD_POOL_TEST_VERSION_MAJOR != BS_THREAD_POOL_VERSION_MAJOR || BS_THREAD_POOL_TEST_VERSION_MINOR != BS_THREAD_POOL_VERSION_MINOR || BS_THREAD_POOL_TEST_VERSION_PATCH != BS_THREAD_POOL_VERSION_PATCH)
-#error The versions of BS_thread_pool_test.cpp and BS_thread_pool.hpp do not match. Aborting compilation.
+    #error The versions of BS_thread_pool_test.cpp and BS_thread_pool.hpp do not match. Aborting compilation.
 #endif
 
 #if (BS_THREAD_POOL_TEST_VERSION_MAJOR != BS_THREAD_POOL_UTILS_VERSION_MAJOR || BS_THREAD_POOL_TEST_VERSION_MINOR != BS_THREAD_POOL_UTILS_VERSION_MINOR || BS_THREAD_POOL_TEST_VERSION_PATCH != BS_THREAD_POOL_UTILS_VERSION_PATCH)
-#error The versions of BS_thread_pool_test.cpp and BS_thread_pool_utils.hpp do not match. Aborting compilation.
+    #error The versions of BS_thread_pool_test.cpp and BS_thread_pool_utils.hpp do not match. Aborting compilation.
 #endif
 
 using int64 = std::int_fast64_t;
@@ -1647,6 +1651,7 @@ void check_purge()
     check(no_flags_set(flags));
 }
 
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
 // ======================================
 // Functions to verify exception handling
 // ======================================
@@ -1709,6 +1714,7 @@ void check_exceptions_multi_future()
     }
     check(caught);
 }
+#endif
 
 // =====================================
 // Functions to verify vector operations
@@ -1958,7 +1964,7 @@ void check_get_pool()
     dual_println("Checking that all threads report the correct pool...");
     std::vector<std::atomic<BS::thread_pool*>> thread_pool_ptrs1(std::thread::hardware_concurrency());
     std::vector<std::atomic<BS::thread_pool*>> thread_pool_ptrs2(std::thread::hardware_concurrency());
-    auto store_pointers = [](std::vector<std::atomic<BS::thread_pool*>>& ptrs)
+    const std::function<void(std::vector<std::atomic<BS::thread_pool*>>&)> store_pointers = [](std::vector<std::atomic<BS::thread_pool*>>& ptrs)
     {
         BS::this_thread::optional_pool ptr = BS::this_thread::get_pool();
         if (ptr.has_value())
@@ -1978,7 +1984,7 @@ void check_get_pool()
         });
     pool1.wait();
     pool2.wait();
-    auto check_pointers = [](const std::vector<std::atomic<BS::thread_pool*>>& ptrs, const BS::thread_pool& pool)
+    const std::function<void(std::vector<std::atomic<BS::thread_pool*>>&, BS::thread_pool&)> check_pointers = [](const std::vector<std::atomic<BS::thread_pool*>>& ptrs, const BS::thread_pool& pool)
     {
         bool correct = true;
         for (const std::atomic<BS::thread_pool*>& ptr : ptrs)
@@ -2257,7 +2263,7 @@ void check_performance()
 void show_intro()
 {
     dual_println("BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library");
-    dual_println("(c) 2023 Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)");
+    dual_println("(c) 2024 Barak Shoshany (baraksh@gmail.com) (https://baraksh.com)");
     dual_println("GitHub: https://github.com/bshoshany/thread-pool");
     dual_println();
 
@@ -2266,24 +2272,34 @@ void show_intro()
     dual_println("Hardware concurrency is ", std::thread::hardware_concurrency(), '.');
     dual_println();
 
+    dual_print("Exception handling is ");
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
+    dual_println("enabled.");
+#else
+    dual_println("disabled.");
+#endif
+
     dual_print("Native handles are ");
 #ifdef BS_THREAD_POOL_ENABLE_NATIVE_HANDLES
     dual_println("enabled.");
 #else
     dual_println("disabled.");
 #endif
+
     dual_print("Pausing is ");
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
     dual_println("enabled.");
 #else
     dual_println("disabled.");
 #endif
+
     dual_print("Priority is ");
 #ifdef BS_THREAD_POOL_ENABLE_PRIORITY
     dual_println("enabled.");
 #else
     dual_println("disabled.");
 #endif
+
     dual_print("Wait deadlock checks are ");
 #ifdef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
     dual_println("enabled.");
@@ -2450,7 +2466,7 @@ int main(int argc, char* argv[])
 #ifdef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
         check_wait_self_deadlock();
 #else
-        print_header("NOTE: Wait deadlock checks disabled, skipping test.");
+        print_header("NOTE: Wait deadlock checks disabled, skipping the corresponding test.");
 #endif
 
         print_header("Checking detach_loop() and submit_loop():");
@@ -2469,15 +2485,19 @@ int main(int argc, char* argv[])
         print_header("Checking pausing:");
         check_pausing();
 #else
-        print_header("NOTE: Pausing disabled, skipping test.");
+        print_header("NOTE: Pausing disabled, skipping the corresponding test.");
 #endif
 
         print_header("Checking purge():");
         check_purge();
 
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
         print_header("Checking exception handling:");
         check_exceptions_submit();
         check_exceptions_multi_future();
+#else
+        print_header("NOTE: Exception handling disabled, skipping the corresponding test.");
+#endif
 
         print_header("Checking parallelized vector operations:");
         check_vectors();
@@ -2486,7 +2506,7 @@ int main(int argc, char* argv[])
         print_header("Checking task priority:");
         check_priority();
 #else
-        print_header("NOTE: Task priority disabled, skipping test.");
+        print_header("NOTE: Task priority disabled, skipping the corresponding test.");
 #endif
 
         print_header("Checking thread initialization functions and get_index():");
@@ -2530,7 +2550,7 @@ int main(int argc, char* argv[])
     {
         print_header("FAILURE: Passed " + std::to_string(tests_succeeded) + " checks, but failed " + std::to_string(tests_failed) + "!", '+');
         dual_println("\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING)
         // macOS does not implement `std::quick_exit` for some reason. `std::exit()` cannot be used here, as it might get stuck if a deadlock occurs.
         std::terminate();
 #else

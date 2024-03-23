@@ -1,16 +1,15 @@
-[![Static Badge](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.4742687-b31b1b)
-](https://doi.org/10.5281/zenodo.4742687)
-[![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b)
-](https://arxiv.org/abs/2105.00613)
+[![Author: Barak Shoshany](https://img.shields.io/badge/author-Barak_Shoshany-009933)](https://baraksh.com/)
+[![DOI: 10.1016/j.softx.2024.101687](https://img.shields.io/badge/DOI-10.1016%2Fj.softx.2024.101687-b31b1b)](https://doi.org/10.1016/j.softx.2024.101687)
+[![arXiv:2105.00613](https://img.shields.io/badge/arXiv-2105.00613-b31b1b)](https://arxiv.org/abs/2105.00613)
 [![License: MIT](https://img.shields.io/github/license/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt)
-[![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)](https://cppreference.com)
-[![GitHub release](https://img.shields.io/github/v/release/bshoshany/thread-pool)](https://github.com/bshoshany/thread-pool/releases)
-[![Vcpkg Version](https://img.shields.io/vcpkg/v/bshoshany-thread-pool)](https://vcpkg.io/)
-[![Conan Version](https://img.shields.io/conan/v/bshoshany-thread-pool)](https://conan.io/center/recipes/bshoshany-thread-pool)
-[![GitHub Repo stars](https://img.shields.io/github/stars/bshoshany/thread-pool?color=009999)](https://github.com/bshoshany/thread-pool/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/bshoshany/thread-pool?color=009999)](https://github.com/bshoshany/thread-pool/forks)
+[![Language: C++17](https://img.shields.io/badge/Language-C%2B%2B17-yellow)](https://cppreference.com/)
+[![GitHub stars](https://img.shields.io/github/stars/bshoshany/thread-pool?style=flat&color=009999)](https://github.com/bshoshany/thread-pool/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/bshoshany/thread-pool?style=flat&color=009999)](https://github.com/bshoshany/thread-pool/forks)
+[![GitHub release](https://img.shields.io/github/v/release/bshoshany/thread-pool?color=660099)](https://github.com/bshoshany/thread-pool/releases)
+[![Vcpkg version](https://img.shields.io/vcpkg/v/bshoshany-thread-pool?color=6600ff)](https://vcpkg.io/)
+[![Meson WrapDB](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmesonbuild%2Fwrapdb%2Fmaster%2Freleases.json&query=%24%5B%22bshoshany-thread-pool%22%5D.versions%5B0%5D&label=wrapdb&color=6600ff)](https://mesonbuild.com/Wrapdb-projects.html)
+[![Conan version](https://img.shields.io/conan/v/bshoshany-thread-pool?color=6600ff)](https://conan.io/center/recipes/bshoshany-thread-pool)
 [![Open in Visual Studio Code](https://img.shields.io/badge/Open_in_Visual_Studio_Code-007acc)](https://vscode.dev/github/bshoshany/thread-pool)
-[![Barak Shoshany's Website](https://img.shields.io/badge/Barak_Shoshany's_Website-009933)](https://baraksh.com/)
 
 # `BS::thread_pool`: a fast, lightweight, and easy-to-use C++17 thread pool library
 
@@ -19,7 +18,7 @@ Email: <baraksh@gmail.com>\
 Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
-This is the complete documentation for v4.0.1 of the library, released on 2023-12-28.
+This is the complete documentation for v4.1.0 of the library, released on 2024-03-22.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
@@ -233,7 +232,7 @@ std::cout << "Thread pool library version is " << BS_THREAD_POOL_VERSION_MAJOR <
 Sample output:
 
 ```none
-Thread pool library version is 4.0.1.
+Thread pool library version is 4.1.0.
 ```
 
 This can be used, for example, to allow the same code base to work with several incompatible versions of the library using `#if` directives.
@@ -1067,7 +1066,7 @@ Note, however, that `BS::synced_stream::endl` should only be used if flushing is
 
 If you are using a thread pool, then your code is most likely performance-critical. Achieving maximum performance requires performing a considerable amount of benchmarking to determine the optimal settings and algorithms. Therefore, it is important to be able to measure the execution time of various computations and operations under different conditions.
 
-The helper class `BS::timer` provides a simple way to measure execution time. It is very straightforward to use:
+The utility class `BS::timer` provides a simple way to measure execution time. It is very straightforward to use:
 
 1. Create a new `BS::timer` object.
 2. Immediately before you execute the computation that you want to time, call the `start()` member function.
@@ -1282,6 +1281,8 @@ int main()
 ```
 
 When using `BS::multi_future` to handle multiple futures at once, exception handling works the same way: if any of the futures may throw exceptions, you may catch these exceptions when calling `get()`, even in the case of `BS::multi_future<void>`.
+
+If you do not require exception handling, or if exceptions are explicitly disabled in your codebase, you can define the macro `BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING` before including `BS_thread_pool.hpp`, which will disable exception handling in `submit_task()`. Note that if the feature-test macro `__cpp_exceptions` is undefined, `BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING` will be automatically defined.
 
 ### Getting information about the threads
 
@@ -1597,6 +1598,8 @@ int main()
 
 This time, `wait()` will detect the deadlock, and will throw an exception, causing the output to be `"Error: Deadlock!"`.
 
+Note that if the feature-test macro `__cpp_exceptions` is undefined, `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK` will be automatically undefined.
+
 ### Accessing native thread handles
 
 The `BS::thread_pool` member function `get_native_handles()` returns a vector containing the underlying implementation-defined thread handles for each of the pool's threads. These can then be used in an implementation-specific way to manage the threads at the OS level
@@ -1783,7 +1786,7 @@ If you are using the [Conan](https://conan.io/) C/C++ package manager, you can e
 
 ```ini
 [requires]
-bshoshany-thread-pool/4.0.1
+bshoshany-thread-pool/4.1.0
 ```
 
 To update the package to the latest version, simply change the version number. Please refer to [this package's page on ConanCenter](https://conan.io/center/recipes/bshoshany-thread-pool) for more information.
@@ -1810,12 +1813,12 @@ If you are using [CMake](https://cmake.org/), you can install `BS::thread_pool` 
 CPMAddPackage(
     NAME BS_thread_pool
     GITHUB_REPOSITORY bshoshany/thread-pool
-    VERSION 4.0.1)
+    VERSION 4.1.0)
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
 ```
 
-This will automatically download the indicated version of the package from this GitHub repository and include it in your project.
+This will automatically download the indicated version of the package from the GitHub repository and include it in your project.
 
 It is also possible to use CPM without installing it first, by adding the following lines to `CMakeLists.txt` before `CPMAddPackage`:
 
@@ -1845,7 +1848,7 @@ include(${CPM_DOWNLOAD_LOCATION})
 CPMAddPackage(
     NAME BS_thread_pool
     GITHUB_REPOSITORY bshoshany/thread-pool
-    VERSION 4.0.1)
+    VERSION 4.1.0)
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
 add_executable(my_project main.cpp)
@@ -1904,6 +1907,8 @@ The class `BS::thread_pool` is the main thread pool class. It can be used to cre
     * `bool wait_for(std::chrono::duration<R, P>& duration)`: Wait for tasks to be completed, but stop waiting after the specified duration has passed. Returns `true` if all tasks finished running, `false` if the duration expired but some tasks are still running.
     * `bool wait_until(std::chrono::time_point<C, D>& timeout_time)`: Wait for tasks to be completed, but stop waiting after the specified time point has been reached. Returns `true` if all tasks finished running, `false` if the time point was reached but some tasks are still running.
 
+When a `BS::thread_pool` object goes out of scope, the destructor first waits for all tasks to complete, then destroys all threads. Note that if the pool is paused, then any tasks still in the queue will never be executed.
+
 #### Optional features for the `BS::thread_pool` class
 
 The thread pool has several optional features that must be explicitly enabled using macros.
@@ -1920,6 +1925,10 @@ The thread pool has several optional features that must be explicitly enabled us
     * `std::vector<std::thread::native_handle_type> get_native_handles()`: Get a vector containing the underlying implementation-defined thread handles for each of the pool's threads.
 * **Wait deadlock checks:** Enabled by defining the macro `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK`.
     * When enabled, `wait()`, `wait_for()`, and `wait_until()` will check whether the user tried to call them from within a thread of the same pool, which would result in a deadlock. If so, they will throw the exception `BS::thread_pool::wait_deadlock` instead of waiting.
+* **Disabling exception handling**: Achieved by defining the macro `BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING`.
+    * This can be used to disable exception handling in `submit_task()` if it is not needed, or if exceptions are explicitly disabled in the codebase.
+    * Note that this macro can be defined independently of `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK`. Disabling exception handling removes the `try`-`catch` block from `submit_task()`, while enabling wait deadlock checks adds a `throw` expression to `wait()`, `wait_for()`, and `wait_until()`.
+    * If the feature-test macro `__cpp_exceptions` is undefined, `BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING` is automatically defined, and `BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK` is automatically undefined.
 
 #### The `BS::this_thread` namespace
 
@@ -1993,33 +2002,32 @@ If you found this project useful, please consider [starring it on GitHub](https:
 
 ### Copyright and citing
 
-Copyright (c) 2023 [Barak Shoshany](http://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
+Copyright (c) 2024 [Barak Shoshany](https://baraksh.com). Licensed under the [MIT license](LICENSE.txt).
 
 If you use this C++ thread pool library in software of any kind, please provide a link to [the GitHub repository](https://github.com/bshoshany/thread-pool) in the source code and documentation.
 
 If you use this library in published research, please cite it as follows:
 
-* Barak Shoshany, *"A C++17 Thread Pool for High-Performance Scientific Computing"*, [doi:10.5281/zenodo.4742687](https://doi.org/10.5281/zenodo.4742687), [arXiv:2105.00613](https://arxiv.org/abs/2105.00613) (May 2021)
+* Barak Shoshany, *"A C++17 Thread Pool for High-Performance Scientific Computing"*, [doi:10.1016/j.softx.2024.101687](https://doi.org/10.1016/j.softx.2024.101687), [SoftwareX 26 (2024) 101687](https://www.sciencedirect.com/science/article/pii/S235271102400058X), [arXiv:2105.00613](https://arxiv.org/abs/2105.00613)
 
 You can use the following BibTeX entry:
 
-```none
-@article{Shoshany2021_ThreadPool,
+```bibtex
+@article{Shoshany2024_ThreadPool,
     archiveprefix = {arXiv},
     author        = {Barak Shoshany},
-    doi           = {10.5281/zenodo.4742687},
-    eid           = {arXiv:2105.00613},
+    doi           = {10.1016/j.softx.2024.101687},
     eprint        = {2105.00613},
-    journal       = {arXiv e-prints},
-    keywords      = {Computer Science - Distributed, Parallel, and Cluster Computing, D.1.3, D.1.5},
-    month         = {May},
-    primaryclass  = {cs.DC},
+    journal       = {SoftwareX},
+    pages         = {101687},
     title         = {{A C++17 Thread Pool for High-Performance Scientific Computing}},
-    year          = {2021}
+    url           = {https://www.sciencedirect.com/science/article/pii/S235271102400058X},
+    volume        = {26},
+    year          = {2024}
 }
 ```
 
-Please note that the [companion paper on arXiv](https://arxiv.org/abs/2105.00613) is updated infrequently. The paper is intended to facilitate discovery of the library by scientists who may find it useful for scientific computing purposes and to allow citing the library in scientific research, but most users should read the `README.md` file on [the GitHub repository](https://github.com/bshoshany/thread-pool) instead, as it is guaranteed to always be up to date.
+Please note that the papers on [SoftwareX](https://www.sciencedirect.com/science/article/pii/S235271102400058X) and [arXiv](https://arxiv.org/abs/2105.00613) are not up to date with the latest version of the library. These publications are only intended to facilitate discovery of this library by scientists, and to enable citing it in scientific research. Documentation for the latest version is provided only by the `README.md` file in [the GitHub repository](https://github.com/bshoshany/thread-pool).
 
 ### Learning more about C++
 

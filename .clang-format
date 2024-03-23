@@ -1,4 +1,3 @@
----
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
 AlignArrayOfStructures: None
@@ -7,12 +6,12 @@ AlignConsecutiveBitFields: None
 AlignConsecutiveDeclarations: None
 AlignConsecutiveMacros: None
 AlignConsecutiveShortCaseStatements:
-    Enabled: false
+  Enabled: false
 AlignEscapedNewlines: Left
 AlignOperands: DontAlign
 AlignTrailingComments:
-    Kind: Always
-    OverEmptyLines: 1
+  Kind: Always
+  OverEmptyLines: 2
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowBreakBeforeNoexceptSpecifier: Never
@@ -26,29 +25,29 @@ AllowShortLambdasOnASingleLine: Empty
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: "Yes"
+AlwaysBreakTemplateDeclarations: Yes
 AttributeMacros: []
 BinPackArguments: true
 BinPackParameters: true
 BitFieldColonSpacing: Both
 BraceWrapping:
-    AfterCaseLabel: true
-    AfterClass: true
-    AfterControlStatement: Always
-    AfterEnum: true
-    AfterExternBlock: true
-    AfterFunction: true
-    AfterNamespace: false
-    AfterStruct: true
-    AfterUnion: true
-    BeforeCatch: true
-    BeforeElse: true
-    BeforeLambdaBody: true
-    BeforeWhile: false
-    IndentBraces: false
-    SplitEmptyFunction: true
-    SplitEmptyNamespace: true
-    SplitEmptyRecord: true
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyNamespace: true
+  SplitEmptyRecord: true
 BracedInitializerIndentWidth: 4
 BreakAdjacentStringLiterals: false
 BreakAfterAttributes: Never
@@ -75,13 +74,13 @@ EmptyLineBeforeAccessModifier: LogicalBlock
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
 IncludeBlocks: Preserve
-IncludeIsMainSourceRegex: ""
+IncludeIsMainSourceRegex: ''
 IndentAccessModifiers: false
 IndentCaseBlocks: false
 IndentCaseLabels: false
 IndentExternBlock: AfterExternBlock
 IndentGotoLabels: true
-IndentPPDirectives: None
+IndentPPDirectives: BeforeHash
 IndentRequires: false
 IndentWidth: 4
 IndentWrappedFunctionNames: false
@@ -90,8 +89,8 @@ JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: true
 LambdaBodyIndentation: Signature
 Language: Cpp
-MacroBlockBegin: ""
-MacroBlockEnd: ""
+MacroBlockBegin: ''
+MacroBlockEnd: ''
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: Inner
 ObjCBinPackProtocolList: Auto
@@ -132,13 +131,13 @@ SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeParensOptions:
-    AfterControlStatements: true
-    AfterForeachMacros: true
-    AfterFunctionDeclarationName: false
-    AfterFunctionDefinitionName: false
-    AfterIfMacros: true
-    AfterOverloadedOperator: false
-    BeforeNonEmptyParentheses: false
+  AfterControlStatements: true
+  AfterForeachMacros: true
+  AfterFunctionDeclarationName: false
+  AfterFunctionDefinitionName: false
+  AfterIfMacros: true
+  AfterOverloadedOperator: false
+  BeforeNonEmptyParentheses: false
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceBeforeSquareBrackets: false
 SpaceInEmptyBlock: false
@@ -149,8 +148,8 @@ SpacesInCStyleCastParentheses: false
 SpacesInConditionalStatement: false
 SpacesInContainerLiterals: true
 SpacesInLineCommentPrefix:
-    Maximum: 1
-    Minimum: 1
+  Maximum: 1
+  Minimum: 1
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
 Standard: c++17

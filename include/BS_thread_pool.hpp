@@ -1,29 +1,40 @@
-#pragma once
-
+#ifndef BS_THREAD_POOL_HPP
+#define BS_THREAD_POOL_HPP
 /**
  * @file BS_thread_pool.hpp
- * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 4.0.1
- * @date 2023-12-28
- * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @author Barak Shoshany (baraksh@gmail.com) (https://baraksh.com)
+ * @version 4.1.0
+ * @date 2024-03-22
+ * @copyright Copyright (c) 2024 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains the main thread pool class and some additional classes and definitions. No other files are needed in order to use the thread pool itself.
  */
 
+#ifndef __cpp_exceptions
+    #define BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
+    #undef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
+#endif
+
 #include <chrono>             // std::chrono
 #include <condition_variable> // std::condition_variable
 #include <cstddef>            // std::size_t
-#include <cstdint>            // std::int_least16_t
-#include <exception>          // std::current_exception
+#ifdef BS_THREAD_POOL_ENABLE_PRIORITY
+    #include <cstdint>        // std::int_least16_t
+#endif
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
+    #include <exception>      // std::current_exception
+#endif
 #include <functional>         // std::function
 #include <future>             // std::future, std::future_status, std::promise
 #include <memory>             // std::make_shared, std::make_unique, std::shared_ptr, std::unique_ptr
 #include <mutex>              // std::mutex, std::scoped_lock, std::unique_lock
 #include <optional>           // std::nullopt, std::optional
-#include <queue>              // std::priority_queue, std::queue
-#include <stdexcept>          // std::runtime_error
+#include <queue>              // std::priority_queue (if priority enabled), std::queue
+#ifdef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
+    #include <stdexcept>      // std::runtime_error
+#endif
 #include <thread>             // std::thread
-#include <type_traits>        // std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v, std::remove_const_t
+#include <type_traits>        // std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v, std::remove_const_t (if priority enabled)
 #include <utility>            // std::forward, std::move
 #include <vector>             // std::vector
 
@@ -33,8 +44,8 @@
 namespace BS {
 // Macros indicating the version of the thread pool library.
 #define BS_THREAD_POOL_VERSION_MAJOR 4
-#define BS_THREAD_POOL_VERSION_MINOR 0
-#define BS_THREAD_POOL_VERSION_PATCH 1
+#define BS_THREAD_POOL_VERSION_MINOR 1
+#define BS_THREAD_POOL_VERSION_PATCH 0
 
 class thread_pool;
 
@@ -65,12 +76,12 @@ namespace pr {
     constexpr priority_t lowest = -32768;
 } // namespace pr
 
-// Macros used internally to enable or disable the priority arguments in the relevant functions.
-#define BS_THREAD_POOL_PRIORITY_INPUT , const priority_t priority = 0
-#define BS_THREAD_POOL_PRIORITY_OUTPUT , priority
+    // Macros used internally to enable or disable the priority arguments in the relevant functions.
+    #define BS_THREAD_POOL_PRIORITY_INPUT , const priority_t priority = 0
+    #define BS_THREAD_POOL_PRIORITY_OUTPUT , priority
 #else
-#define BS_THREAD_POOL_PRIORITY_INPUT
-#define BS_THREAD_POOL_PRIORITY_OUTPUT
+    #define BS_THREAD_POOL_PRIORITY_INPUT
+    #define BS_THREAD_POOL_PRIORITY_OUTPUT
 #endif
 
 /**
@@ -564,19 +575,19 @@ public:
      */
     void reset(const concurrency_t num_threads, const std::function<void()>& init_task)
     {
-        std::unique_lock tasks_lock(tasks_mutex);
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
+        std::unique_lock tasks_lock(tasks_mutex);
         const bool was_paused = paused;
         paused = true;
-#endif
         tasks_lock.unlock();
+#endif
         wait();
         destroy_threads();
         thread_count = determine_thread_count(num_threads);
         threads = std::make_unique<std::thread[]>(thread_count);
         create_threads(init_task);
-        tasks_lock.lock();
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
+        tasks_lock.lock();
         paused = was_paused;
 #endif
     }
@@ -597,8 +608,10 @@ public:
         detach_task(
             [task = std::forward<F>(task), task_promise]
             {
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
                 try
                 {
+#endif
                     if constexpr (std::is_void_v<R>)
                     {
                         task();
@@ -608,6 +621,7 @@ public:
                     {
                         task_promise->set_value(task());
                     }
+#ifndef BS_THREAD_POOL_DISABLE_EXCEPTION_HANDLING
                 }
                 catch (...)
                 {
@@ -619,6 +633,7 @@ public:
                     {
                     }
                 }
+#endif
             } BS_THREAD_POOL_PRIORITY_OUTPUT);
         return task_promise->get_future();
     }
@@ -733,9 +748,9 @@ public:
 
 // Macros used internally to enable or disable pausing in the waiting and worker functions.
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
-#define BS_THREAD_POOL_PAUSED_OR_EMPTY (paused || tasks.empty())
+    #define BS_THREAD_POOL_PAUSED_OR_EMPTY (paused || tasks.empty())
 #else
-#define BS_THREAD_POOL_PAUSED_OR_EMPTY tasks.empty()
+    #define BS_THREAD_POOL_PAUSED_OR_EMPTY tasks.empty()
 #endif
 
     /**
@@ -1138,3 +1153,4 @@ private:
     bool workers_running = false;
 }; // class thread_pool
 } // namespace BS
+#endif

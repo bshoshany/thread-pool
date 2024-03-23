@@ -1,16 +1,15 @@
-#pragma once
-
+#ifndef BS_THREAD_POOL_UTILS_HPP
+#define BS_THREAD_POOL_UTILS_HPP
 /**
  * @file BS_thread_pool_utils.hpp
- * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
- * @version 4.0.1
- * @date 2023-12-28
- * @copyright Copyright (c) 2023 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @author Barak Shoshany (baraksh@gmail.com) (https://baraksh.com)
+ * @version 4.1.0
+ * @date 2024-03-22
+ * @copyright Copyright (c) 2024 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
  *
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains independent utility classes that are part of the library, but are not needed to use the thread pool itself.
  */
 
-#include <atomic>           // std::atomic
 #include <chrono>           // std::chrono
 #include <future>           // std::promise, std::shared_future
 #include <initializer_list> // std::initializer_list
@@ -26,8 +25,8 @@
 namespace BS {
 // Macros indicating the version of the thread pool utilities library.
 #define BS_THREAD_POOL_UTILS_VERSION_MAJOR 4
-#define BS_THREAD_POOL_UTILS_VERSION_MINOR 0
-#define BS_THREAD_POOL_UTILS_VERSION_PATCH 1
+#define BS_THREAD_POOL_UTILS_VERSION_MINOR 1
+#define BS_THREAD_POOL_UTILS_VERSION_PATCH 0
 
 /**
  * @brief A utility class to allow simple signalling between threads.
@@ -201,3 +200,4 @@ private:
     std::chrono::duration<double> elapsed_time = std::chrono::duration<double>::zero();
 }; // class timer
 } // namespace BS
+#endif
