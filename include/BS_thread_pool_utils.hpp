@@ -10,6 +10,7 @@
  * @brief BS::thread_pool: a fast, lightweight, and easy-to-use C++17 thread pool library. This header file contains independent utility classes that are part of the library, but are not needed to use the thread pool itself.
  */
 
+#ifndef BS_THREAD_POOL_USE_STD_MODULE
 #include <chrono>           // std::chrono
 #include <future>           // std::promise, std::shared_future
 #include <initializer_list> // std::initializer_list
@@ -18,6 +19,7 @@
 #include <mutex>            // std::mutex, std::scoped_lock
 #include <ostream>          // std::endl, std::flush, std::ostream
 #include <utility>          // std::forward
+#endif
 
 /**
  * @brief A namespace used by Barak Shoshany's projects.

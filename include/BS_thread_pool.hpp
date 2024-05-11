@@ -15,6 +15,7 @@
     #undef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
 #endif
 
+#ifndef BS_THREAD_POOL_USE_STD_MODULE
 #include <chrono>             // std::chrono
 #include <condition_variable> // std::condition_variable
 #include <cstddef>            // std::size_t
@@ -37,6 +38,7 @@
 #include <type_traits>        // std::conditional_t, std::decay_t, std::invoke_result_t, std::is_void_v, std::remove_const_t (if priority enabled)
 #include <utility>            // std::forward, std::move
 #include <vector>             // std::vector
+#endif
 
 /**
  * @brief A namespace used by Barak Shoshany's projects.
