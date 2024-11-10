@@ -1865,7 +1865,7 @@ cmake --build build
 
 ### Installing using CMake without CPM
 
-It is also possible to install `BS::thread_pool` using CMake without CPM using the built-in [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) functionality.
+It is also possible to install `BS::thread_pool` with CMake using the built-in [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) feature, without relying on CPM.
 
 ```cmake
 cmake_minimum_required(VERSION 3.19)
