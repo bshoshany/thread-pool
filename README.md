@@ -1878,6 +1878,7 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 FetchContent_Declare(
   thread_pool
   URL https://github.com/bshoshany/thread-pool/archive/v4.1.0.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   EXCLUDE_FROM_ALL
   SYSTEM
 )
