@@ -66,6 +66,7 @@ This is the complete documentation for v4.1.0 of the library, released on 2024-0
     * [Installing using Conan](#installing-using-conan)
     * [Installing using Meson](#installing-using-meson)
     * [Installing using CMake with CPM](#installing-using-cmake-with-cpm)
+    * [Installing using CMake without CPM](#installing-using-cmake-without-cpm)
 * [Complete library reference](#complete-library-reference)
     * [Main thread pool header file (`BS_thread_pool.hpp`)](#main-thread-pool-header-file-bs_thread_poolhpp)
         * [The `BS::thread_pool` class](#the-bsthread_pool-class)
@@ -1860,6 +1861,34 @@ With both `CMakeLists.txt` and `main.cpp` in the same folder, type the following
 ```none
 cmake -S . -B build
 cmake --build build
+```
+
+### Installing using CMake without CPM
+
+It is also possible to install `BS::thread_pool` using CMake without CPM using the built-in [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) functionality.
+
+```cmake
+cmake_minimum_required(VERSION 3.19)
+project(my_project LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(FetchContent)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+FetchContent_Declare(
+  thread_pool
+  GIT_REPOSITORY https://github.com/bshoshany/thread-pool.git
+  GIT_TAG        v4.1.0
+  GIT_PROGRESS   TRUE
+  GIT_SHALLOW    TRUE
+  EXCLUDE_FROM_ALL
+  SYSTEM
+)
+FetchContent_MakeAvailable(thread_pool)
+add_library(thread_pool INTERFACE)
+target_include_directories(thread_pool INTERFACE ${thread_pool_SOURCE_DIR}/include)
+add_executable(my_project main.cpp)
+target_link_libraries(my_project thread_pool)
 ```
 
 ## Complete library reference
