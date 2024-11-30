@@ -15,6 +15,7 @@
     #undef BS_THREAD_POOL_ENABLE_WAIT_DEADLOCK_CHECK
 #endif
 
+#include <atomic>
 #include <chrono>             // std::chrono
 #include <condition_variable> // std::condition_variable
 #include <cstddef>            // std::size_t
@@ -416,6 +417,19 @@ public:
         return thread_ids;
     }
 
+    /**
+     * @brief Get the total amount of time that the threads have been idle.
+     *
+     * @return The total idle time in seconds.
+     */
+    [[nodiscard]] double get_wall_idle_time() const
+    {
+        const std::unique_lock tasks_lock(tasks_mutex);
+        const double count = static_cast<double>(thread_count);
+        const double total_idle_time = static_cast<double>(idle_time.load()) * 1.0e-9;
+        return total_idle_time / count;
+    }
+
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
     /**
      * @brief Check whether the pool is currently paused. Only enabled if `BS_THREAD_POOL_ENABLE_PAUSE` is defined.
@@ -586,6 +600,7 @@ public:
         thread_count = determine_thread_count(num_threads);
         threads = std::make_unique<std::thread[]>(thread_count);
         create_threads(init_task);
+        idle_time.store(0);
 #ifdef BS_THREAD_POOL_ENABLE_PAUSE
         tasks_lock.lock();
         paused = was_paused;
@@ -910,6 +925,8 @@ private:
         this_thread::get_pool.pool = this;
         init_task();
         std::unique_lock tasks_lock(tasks_mutex);
+        std::chrono::steady_clock::time_point begin;
+        std::chrono::steady_clock::time_point end;
         while (true)
         {
             --tasks_running;
@@ -917,6 +934,7 @@ private:
             if (waiting && (tasks_running == 0) && BS_THREAD_POOL_PAUSED_OR_EMPTY)
                 tasks_done_cv.notify_all();
             tasks_lock.lock();
+            begin = std::chrono::steady_clock::now(); // time, thread goes into sleeping mode
             task_available_cv.wait(tasks_lock,
                 [this]
                 {
@@ -924,6 +942,9 @@ private:
                 });
             if (!workers_running)
                 break;
+
+            end = std::chrono::steady_clock::now(); // time, thread wakes up
+            add_on_idle_time(begin, end); // add time to idle time
             {
 #ifdef BS_THREAD_POOL_ENABLE_PRIORITY
                 const std::function<void()> task = std::move(std::remove_const_t<pr_task&>(tasks.top()).task);
@@ -941,6 +962,16 @@ private:
         this_thread::get_index.index = std::nullopt;
         this_thread::get_pool.pool = std::nullopt;
     }
+
+    /**
+     * @brief Given a begin and end time stamp, calculate the time difference and add it the the total idle time.
+     */
+    void add_on_idle_time(const std::chrono::steady_clock::time_point &begin, const std::chrono::steady_clock::time_point &end)
+    {
+        const long long idle_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
+        idle_time.fetch_add(idle_duration_ns, std::memory_order_relaxed);
+    }
+
 
     // ===============
     // Private classes
@@ -1151,6 +1182,13 @@ private:
      * @brief A flag indicating to the workers to keep running. When set to `false`, the workers terminate permanently.
      */
     bool workers_running = false;
+
+    /**
+     * @brief The total time that threads have been idle (nanoseconds).
+     */
+    std::atomic<long long> idle_time{0}; // total idle time that threads have been in sleeping mode (nanoseconds)
+
+
 }; // class thread_pool
 } // namespace BS
 #endif

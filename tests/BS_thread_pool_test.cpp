@@ -2147,6 +2147,17 @@ double generate_element(const size_t idx)
 }
 
 /**
+ * @brief Prints the wall idle time of the  thread pool.
+ *
+ * @param pool The thread pool.
+ */
+void print_idle_time(const BS::thread_pool& pool)
+{
+    const double idle_time_seconds = pool.get_wall_idle_time();
+    dual_println("Wall idle time: ", idle_time_seconds, " seconds");
+}
+
+/**
  * @brief Benchmark multithreaded performance.
  */
 void check_performance()
@@ -2251,6 +2262,7 @@ void check_performance()
         }
     }
     print_speedup(different_n_timings, try_tasks);
+    print_idle_time(pool);
 }
 
 // ===============================================
