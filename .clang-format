@@ -11,7 +11,7 @@ AlignEscapedNewlines: Left
 AlignOperands: DontAlign
 AlignTrailingComments:
   Kind: Always
-  OverEmptyLines: 2
+  OverEmptyLines: 0
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowBreakBeforeNoexceptSpecifier: Never
@@ -117,6 +117,7 @@ ReflowComments: true
 RemoveBracesLLVM: false
 SeparateDefinitionBlocks: Always
 ShortNamespaceLines: 1
+SkipMacroDefinitionBody: true
 SortIncludes: CaseSensitive
 SortJavaStaticImport: Before
 SortUsingDeclarations: true
@@ -152,7 +153,7 @@ SpacesInLineCommentPrefix:
   Minimum: 1
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: c++17
+Standard: Latest
 TabWidth: 4
 UseCRLF: false
 UseTab: Never

@@ -1,0 +1,110 @@
+{
+    "configurations": [
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerArgs": [
+                "-stdlib=libc++"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-clang-x64",
+            "name": "Clang C++17"
+        },
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerArgs": [
+                "-stdlib=libc++"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cppStandard": "c++20",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-clang-x64",
+            "name": "Clang C++20"
+        },
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerArgs": [
+                "-stdlib=libc++"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cppStandard": "c++23",
+            "cStandard": "c23",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-clang-x64",
+            "name": "Clang C++23"
+        },
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPath": "/usr/bin/g++",
+            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-gcc-x64",
+            "name": "GCC C++17"
+        },
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPath": "/usr/bin/g++",
+            "cppStandard": "c++20",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-gcc-x64",
+            "name": "GCC C++20"
+        },
+        {
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPath": "/usr/bin/g++",
+            "cppStandard": "c++23",
+            "cStandard": "c23",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "linux-gcc-x64",
+            "name": "GCC C++23"
+        }
+    ],
+    "version": 4
+}

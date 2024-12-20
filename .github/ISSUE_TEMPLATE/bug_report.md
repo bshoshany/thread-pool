@@ -3,8 +3,6 @@ name: Bug report
 about: Found a bug? Report it here.
 title: "[BUG]"
 labels: bug
-assignees: bshoshany
-
 ---
 
 **Describe the bug**

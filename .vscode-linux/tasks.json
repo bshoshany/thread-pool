@@ -1,0 +1,532 @@
+{
+    "tasks": [
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++17",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (Clang C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++20",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (Clang C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++23",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (Clang C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++17",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (GCC C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++20",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (GCC C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++23",
+                "-t=debug",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and debugging flags.",
+            "group": "build",
+            "label": "Build for debugging (GCC C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++17",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (Clang C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++20",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (Clang C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++23",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (Clang C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++17",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (GCC C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++20",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (GCC C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++23",
+                "-t=release",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags.",
+            "group": "build",
+            "label": "Build optimized (GCC C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "type": "cppbuild"
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++17",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (Clang C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++20",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (Clang C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=clang++",
+                "-s=c++23",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using clang++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (Clang C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++17",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (GCC C++17)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++20",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (GCC C++20)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-c=g++",
+                "-s=c++23",
+                "-t=release",
+                "-r",
+                "-v"
+            ],
+            "command": "python3",
+            "detail": "Compile active file using g++ with warning and optimization flags and run the program.",
+            "group": "test",
+            "label": "Build optimized and run (GCC C++23)",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            }
+        },
+        {
+            "args": [
+                "scripts/clear_folder.py",
+                "../build"
+            ],
+            "command": "python3",
+            "detail": "Delete all files in the build folder.",
+            "group": "test",
+            "label": "Clear build folder",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "type": "shell"
+        },
+        {
+            "args": [
+                "scripts/clear_folder.py",
+                "../temp"
+            ],
+            "command": "python3",
+            "detail": "Delete all files in the temp folder.",
+            "group": "test",
+            "label": "Clear temp folder",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "type": "shell"
+        },
+        {
+            "args": [
+                "scripts/test_all.py"
+            ],
+            "command": "python3",
+            "detail": "Compile and run the test program with all available compilers and all relevant C++ standards.",
+            "group": "test",
+            "label": "Run all tests",
+            "presentation": {
+                "clear": false,
+                "echo": true,
+                "focus": false,
+                "panel": "shared",
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": true
+            },
+            "type": "shell"
+        }
+    ],
+    "version": "2.0.0"
+}

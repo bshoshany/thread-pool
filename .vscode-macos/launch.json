@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++17)",
+            "preLaunchTask": "Build for debugging (Clang C++17)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp17",
+            "request": "launch",
+            "type": "lldb"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++20)",
+            "preLaunchTask": "Build for debugging (Clang C++20)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp20",
+            "request": "launch",
+            "type": "lldb"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++23)",
+            "preLaunchTask": "Build for debugging (Clang C++23)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp23",
+            "request": "launch",
+            "type": "lldb"
+        }
+    ],
+    "version": "0.2.0"
+}

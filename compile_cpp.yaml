@@ -1,0 +1,25 @@
+# A list of macros to define when compiling the source files.
+defines: [BS_THREAD_POOL_TEST_IMPORT_MODULE, BS_THREAD_POOL_IMPORT_STD, BS_THREAD_POOL_NATIVE_EXTENSIONS]
+# A map of flags to pass to each compiler. The compiler should be one of [cl, clang++, g++]. The flags should be a list of strings.
+flags:
+  cl: [/W4]
+  clang++: [-Wall, -Wextra, -Wconversion, -Wsign-conversion, -Wpedantic, -Wshadow, -Weffc++, -march=native, -fcolor-diagnostics, -fansi-escape-codes, -stdlib=libc++]
+  g++: [-Wall, -Wextra, -Wconversion, -Wpedantic, -Wshadow, -Wuseless-cast, -march=native, -fdiagnostics-color=always]
+# A list of include folders.
+includes: [include]
+# A map of C++20 modules in the format "module_name: [module_path, dependent files, ...]". Will only be used in C++20 or C++23 mode. The dependent files are any files that the module depends on, and are only used to determine whether the module needs to be recompiled.
+modules:
+  BS.thread_pool: [modules/BS.thread_pool.cppm, include/BS_thread_pool.hpp]
+# The output folder for the compiled files.
+output: build/
+# A list of arguments to pass to the program if running it after compilation.
+pass_args: []
+# A map of paths to the standard library modules for each OS and compiler combination (C++23 only). The OS should be one of [Darwin, Linux, Windows]. This is currently only officially supported by MSVC with Microsoft STL and LLVM Clang (NOT Apple Clang) with LLVM libc++. It is not supported by GCC with any standard library, or any compiler with GNU libstdc++. Use "auto" to determine the path automatically if possible.
+std_module:
+  Darwin:
+    clang++: auto
+  Linux:
+    clang++: auto
+  Windows:
+    cl: auto
+    clang++: auto

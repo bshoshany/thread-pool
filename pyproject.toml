@@ -1,0 +1,382 @@
+[tool.pyright]
+analyzeUnannotatedFunctions = true
+deprecateTypingAliases = true
+disableBytesTypePromotions = true
+enableExperimentalFeatures = false
+enableReachabilityAnalysis = true
+enableTypeIgnoreComments = true
+extraPaths = ["."]
+pythonPlatform = "All"
+pythonVersion = "3.13"
+reportAbstractUsage = "error"
+reportArgumentType = "error"
+reportAssertAlwaysTrue = "error"
+reportAssertTypeFailure = "error"
+reportAssignmentType = "error"
+reportAttributeAccessIssue = "error"
+reportCallInDefaultInitializer = "error"
+reportCallIssue = "error"
+reportConstantRedefinition = "error"
+reportDeprecated = "error"
+reportDuplicateImport = "error"
+reportFunctionMemberAccess = "error"
+reportGeneralTypeIssues = "error"
+reportImplicitOverride = "error"
+reportImplicitStringConcatenation = "error"
+reportImportCycles = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+reportIncompleteStub = "error"
+reportInconsistentConstructor = "error"
+reportInconsistentOverload = "error"
+reportIndexIssue = "error"
+reportInvalidStringEscapeSequence = "error"
+reportInvalidStubStatement = "error"
+reportInvalidTypeArguments = "error"
+reportInvalidTypeForm = "error"
+reportInvalidTypeVarUse = "error"
+reportMatchNotExhaustive = "error"
+reportMissingImports = "error"
+reportMissingModuleSource = "error"
+reportMissingParameterType = "error"
+reportMissingTypeArgument = "error"
+reportMissingTypeStubs = "error"
+reportNoOverloadImplementation = "error"
+reportOperatorIssue = "none"
+reportOptionalCall = "error"
+reportOptionalContextManager = "error"
+reportOptionalIterable = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalOperand = "error"
+reportOptionalSubscript = "error"
+reportOverlappingOverload = "error"
+reportPossiblyUnboundVariable = "error"
+reportPrivateImportUsage = "error"
+reportPrivateUsage = "error"
+reportPropertyTypeMismatch = "none"
+reportRedeclaration = "error"
+reportReturnType = "error"
+reportSelfClsParameterName = "error"
+reportShadowedImports = "error"
+reportTypeCommentUsage = "error"
+reportTypedDictNotRequiredAccess = "error"
+reportUnboundVariable = "error"
+reportUndefinedVariable = "error"
+reportUnhashable = "error"
+reportUninitializedInstanceVariable = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "error"
+reportUnknownVariableType = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnsupportedDunderAll = "error"
+reportUntypedBaseClass = "error"
+reportUntypedClassDecorator = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedNamedTuple = "error"
+reportUnusedCallResult = "error"
+reportUnusedClass = "warning"
+reportUnusedCoroutine = "error"
+reportUnusedExcept = "error"
+reportUnusedExpression = "error"
+reportUnusedFunction = "warning"
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportWildcardImportFromLibrary = "error"
+strictDictionaryInference = true
+strictListInference = true
+strictParameterNoneValue = true
+strictSetInference = true
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+
+[tool.ruff]
+indent-width = 4
+line-length = 320
+target-version = "py313"
+
+[tool.ruff.format]
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+fixable = ["ALL"]
+ignore = [
+    "BLE001",
+    "C901",
+    "D200",
+    "D203",
+    "D205",
+    "D212",
+    "D400",
+    "D402",
+    "D415",
+    "E501",
+    "INP001",
+    "N814",
+    "N999",
+    "PLR0912",
+    "PLR0913",
+    "PLR2004",
+    "RUF009",
+    "S310",
+    "S602",
+    "S603",
+    "S607",
+    "SIM108",
+    "SLF001",
+    "T201",
+    "TCH003",
+    "TD002",
+    "TD003",
+    "UP015",
+]
+select = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"Interactive*" = ["ALL"]
+
+[tool.pylint.main]
+analyse-fallback-blocks = false
+clear-cache-post-run = false
+exit-zero = false
+extension-pkg-allow-list = []
+extension-pkg-whitelist = []
+fail-on = ""
+fail-under = 10
+from-stdin = false
+ignore-paths = []
+ignore-patterns = []
+ignored-modules = []
+init-hook = ""
+jobs = 0
+limit-inference-results = 100
+load-plugins = []
+persistent = true
+prefer-stubs = true
+py-version = "3.13"
+recursive = false
+source-roots = []
+suggestion-mode = true
+unsafe-load-any-extension = false
+
+[tool.pylint.basic]
+argument-naming-style = "snake_case"
+argument-rgx = ""
+attr-naming-style = "snake_case"
+attr-rgx = ""
+bad-names = []
+bad-names-rgxs = ""
+class-attribute-naming-style = "any"
+class-attribute-rgx = ""
+class-const-naming-style = "UPPER_CASE"
+class-const-rgx = ""
+class-naming-style = "PascalCase"
+class-rgx = ""
+const-naming-style = "UPPER_CASE"
+const-rgx = ""
+docstring-min-length = -1
+function-naming-style = "snake_case"
+function-rgx = ""
+good-names = ["_"]
+good-names-rgxs = ""
+include-naming-hint = true
+inlinevar-naming-style = "any"
+inlinevar-rgx = ""
+method-naming-style = "snake_case"
+method-rgx = ""
+module-naming-style = "snake_case"
+module-rgx = ""
+name-group = []
+no-docstring-rgx = ""
+property-classes = ["abc.abstractproperty"]
+typealias-rgx = ""
+typevar-rgx = ""
+variable-naming-style = "snake_case"
+variable-rgx = ""
+
+[tool.pylint.classes]
+check-protected-access-in-special-methods = true
+defining-attr-methods = [
+    "__init__",
+    "__new__",
+    "__post_init__",
+    "asyncSetUp",
+    "setUp",
+]
+exclude-protected = [
+    "_asdict",
+    "_fields",
+    "_make",
+    "_replace",
+    "_source",
+    "os._exit",
+]
+valid-classmethod-first-arg = ["cls"]
+valid-metaclass-classmethod-first-arg = ["mcs"]
+
+[tool.pylint.design]
+exclude-too-few-public-methods = []
+ignored-parents = []
+max-args = 5
+max-attributes = 7
+max-bool-expr = 5
+max-branches = 12
+max-locals = 15
+max-parents = 7
+max-public-methods = 20
+max-returns = 6
+max-statements = 50
+min-public-methods = 2
+
+[tool.pylint.exceptions]
+overgeneral-exceptions = ["builtins.BaseException", "builtins.Exception"]
+
+[tool.pylint.format]
+expected-line-ending-format = "LF"
+ignore-long-lines = "^\\s*(# )?<?https?://\\S+>?$"
+indent-after-paren = 4
+indent-string = "    "
+max-line-length = 1024
+max-module-lines = 8192
+single-line-class-stmt = false
+single-line-if-stmt = false
+
+[tool.pylint.imports]
+allow-any-import-level = []
+allow-reexport-from-package = false
+allow-wildcard-with-all = false
+deprecated-modules = []
+ext-import-graph = ""
+import-graph = ""
+int-import-graph = ""
+known-standard-library = []
+known-third-party = []
+preferred-modules = []
+
+[tool.pylint.logging]
+logging-format-style = "new"
+logging-modules = ["logging"]
+
+[tool.pylint."messages control"]
+confidence = []
+disable = [
+    "broad-exception-caught",
+    "consider-using-enumerate",
+    "expression-not-assigned",
+    "import-error",
+    "invalid-unary-operand-type",
+    "missing-module-docstring",
+    "named-expr-without-context",
+    "not-callable",
+    "pointless-statement",
+    "protected-access",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-boolean-expressions",
+    "too-many-branches",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-nested-blocks",
+    "too-many-public-methods",
+    "ungrouped-imports",
+    "use-implicit-booleaness-not-comparison-to-string",
+    "use-implicit-booleaness-not-comparison-to-zero",
+    "wrong-import-order",
+    "wrong-import-position",
+]
+enable = ["all"]
+
+[tool.pylint.method_args]
+timeout-methods = [
+    "requests.api.delete",
+    "requests.api.get",
+    "requests.api.head",
+    "requests.api.options",
+    "requests.api.patch",
+    "requests.api.post",
+    "requests.api.put",
+    "requests.api.request",
+]
+
+[tool.pylint.miscellaneous]
+notes = ["TODO"]
+notes-rgx = ""
+
+[tool.pylint.refactoring]
+max-nested-blocks = 5
+never-returning-functions = ["argparse.parse_error", "sys.exit"]
+suggest-join-with-non-empty-separator = true
+
+[tool.pylint.reports]
+evaluation = "max(0, 0 if fatal else 10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10))"
+msg-template = ""
+output-format = "text"
+reports = true
+score = true
+
+[tool.pylint.similarities]
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+ignore-signatures = true
+min-similarity-lines = 4
+
+[tool.pylint.spelling]
+max-spelling-suggestions = 4
+spelling-dict = ""
+spelling-ignore-comment-directives = "fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:"
+spelling-ignore-words = ""
+spelling-private-dict-file = ""
+spelling-store-unknown-words = false
+
+[tool.pylint.typecheck]
+contextmanager-decorators = ["contextlib.contextmanager"]
+generated-members = []
+ignore-mixin-members = true
+ignore-none = true
+ignore-on-opaque-inference = false
+ignored-checks-for-mixins = [
+    "attribute-defined-outside-init",
+    "no-member",
+    "not-async-context-manager",
+    "not-context-manager",
+]
+ignored-classes = [
+    "_thread._local",
+    "argparse.Namespace",
+    "optparse.Values",
+    "thread._local",
+]
+missing-member-hint = true
+missing-member-hint-distance = 1
+missing-member-max-choices = 1
+mixin-class-rgx = ".*[Mm]ixin"
+signature-mutators = []
+
+[tool.pylint.variables]
+additional-builtins = []
+allow-global-unused-variables = true
+allowed-redefined-builtins = []
+callbacks = ["_cb", "cb_"]
+dummy-variables-rgx = "^_.*"
+ignored-argument-names = "^_.*"
+init-import = true
+redefining-builtins-modules = [
+    "builtins",
+    "future.builtins",
+    "io",
+    "past.builtins",
+    "six.moves",
+]

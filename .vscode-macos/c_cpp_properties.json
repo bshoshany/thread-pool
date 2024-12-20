@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "compilerPath": "/usr/local/opt/llvm/bin/clang++",
+            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "macos-clang-x64",
+            "name": "Clang C++17"
+        },
+        {
+            "compilerPath": "/usr/local/opt/llvm/bin/clang++",
+            "cppStandard": "c++20",
+            "cStandard": "c17",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "macos-clang-x64",
+            "name": "Clang C++20"
+        },
+        {
+            "compilerPath": "/usr/local/opt/llvm/bin/clang++",
+            "cppStandard": "c++23",
+            "cStandard": "c23",
+            "defines": [
+                "BS_THREAD_POOL_NATIVE_EXTENSIONS"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "macos-clang-x64",
+            "name": "Clang C++23"
+        }
+    ],
+    "version": 4
+}

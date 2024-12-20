@@ -1,0 +1,59 @@
+{
+    "configurations": [
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++17)",
+            "preLaunchTask": "Build for debugging (Clang C++17)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp17",
+            "request": "launch",
+            "type": "lldb"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++20)",
+            "preLaunchTask": "Build for debugging (Clang C++20)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp20",
+            "request": "launch",
+            "type": "lldb"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (Clang C++23)",
+            "preLaunchTask": "Build for debugging (Clang C++23)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-clang-cpp23",
+            "request": "launch",
+            "type": "lldb"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (GCC C++17)",
+            "preLaunchTask": "Build for debugging (GCC C++17)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-gcc-cpp17",
+            "request": "launch",
+            "type": "cppdbg"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (GCC C++20)",
+            "preLaunchTask": "Build for debugging (GCC C++20)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-gcc-cpp20",
+            "request": "launch",
+            "type": "cppdbg"
+        },
+        {
+            "args": [],
+            "cwd": "${workspaceFolder}${/}build",
+            "name": "Build and debug (GCC C++23)",
+            "preLaunchTask": "Build for debugging (GCC C++23)",
+            "program": "${workspaceFolder}${/}build${/}${fileBasenameNoExtension}_debug-gcc-cpp23",
+            "request": "launch",
+            "type": "cppdbg"
+        }
+    ],
+    "version": "0.2.0"
+}

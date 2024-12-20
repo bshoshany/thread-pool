@@ -3,8 +3,6 @@ name: Failed tests
 about: The provided automated tests failed on your system? Report it here.
 title: "[TEST]"
 labels: bug
-assignees: bshoshany
-
 ---
 
 **System information**
