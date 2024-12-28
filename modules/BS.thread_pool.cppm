@@ -42,7 +42,9 @@ using BS::thread_pool_native_extensions;
 using BS::thread_pool_version;
 using BS::tp;
 using BS::version;
+#ifdef __cpp_exceptions
 using BS::wait_deadlock;
+#endif
 using BS::wdc_thread_pool;
 
 #ifdef BS_THREAD_POOL_NATIVE_EXTENSIONS
