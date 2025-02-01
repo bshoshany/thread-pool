@@ -795,6 +795,9 @@ public:
             affinity[i] = ((previous_mask & (1ULL << i)) != 0ULL);
         return affinity;
     #elif defined(__linux__)
+    #if defined(__ANDROID__)
+        return std::nullopt;
+    #else
         cpu_set_t cpu_set;
         CPU_ZERO(&cpu_set);
         if (pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set) != 0)
@@ -806,6 +809,7 @@ public:
         for (std::size_t i = 0; i < affinity.size(); ++i)
             affinity[i] = CPU_ISSET(i, &cpu_set);
         return affinity;
+    #endif
     #elif defined(__APPLE__)
         return std::nullopt;
     #endif
@@ -825,6 +829,9 @@ public:
             thread_mask |= (affinity[i] ? (1ULL << i) : 0ULL);
         return SetThreadAffinityMask(GetCurrentThread(), thread_mask) != 0;
     #elif defined(__linux__)
+    #if defined(__ANDROID__)
+        return false;
+    #else
         cpu_set_t cpu_set;
         CPU_ZERO(&cpu_set);
         for (std::size_t i = 0; i < std::min<std::size_t>(affinity.size(), CPU_SETSIZE); ++i)
@@ -833,6 +840,7 @@ public:
                 CPU_SET(i, &cpu_set);
         }
         return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set) == 0;
+    #endif
     #elif defined(__APPLE__)
         return affinity[0] && false; // NOLINT(readability-simplify-boolean-expr) // Using `affinity` to suppress unused parameter warning.
     #endif
