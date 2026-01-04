@@ -22,4 +22,4 @@ preferred-citation:
 repository-code: https://github.com/bshoshany/thread-pool
 title: A C++17 Thread Pool for High-Performance Scientific Computing
 type: software
-url: https://github.com/bshoshany/thread-pool
+url: https://github.com/bshoshany/thread-pool 

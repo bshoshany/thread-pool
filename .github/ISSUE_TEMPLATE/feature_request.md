@@ -18,4 +18,4 @@ An example of code that utilizes the suggested feature. Paste or write it betwee
 
 **Additional information**
 
-Include any additional information here.
+Include any additional information here. 

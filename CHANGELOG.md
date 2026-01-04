@@ -6,6 +6,7 @@ Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
 * [Version history](#version-history)
+    * [v5.1.0 (2026-01-03)](#v510-2026-01-03)
     * [v5.0.0 (2024-12-19)](#v500-2024-12-19)
     * [v4.1.0 (2024-03-22)](#v410-2024-03-22)
     * [v4.0.1 (2023-12-28)](#v401-2023-12-28)
@@ -29,6 +30,50 @@ GitHub: <https://github.com/bshoshany>
     * [v1.0 (2021-01-15)](#v10-2021-01-15)
 
 ## Version history
+
+### v5.1.0 (2026-01-03)
+
+* New/changed features:
+    * Added `detach_bulk()` and `submit_bulk()` member functions to submit tasks in bulk. You can pass either a range of iterators or a container. The mutex protecting the task queue is locked only once for the entire bulk submission, which should improve performance when submitting a large number of tasks; if the tasks were submitted using individual calls to `detach_task()` or `submit_task()` instead, the mutex would need to be locked and unlocked for each task.
+    * `detach_blocks()`/`detach_loop()`/`detach_sequence()` and `submit_blocks()`/`submit_loop()`/`submit_sequence()` now use `detach_bulk()` and `submit_bulk()`, respectively, under the hood for increased performance (the API remains the same). They have also been refactored using helper functions and custom function object classes to reduce code duplication.
+    * All `submit_*` member functions now use a C++17/20 polyfill for `std::move_only_function` when C++23 is not available (or when using libc++, which at the time of this release has not implemented it yet). This allows them to work without using `std::shared_ptr`, which should increase performance.
+    * If the native extensions are enabled, a pool created with the default constructor will now only use the number of threads available to the process, as obtained from `BS::get_os_process_affinity()`, which can be less than the number of hardware threads. See [#161](https://github.com/bshoshany/thread-pool/issues/161).
+    * Since importing the C++ Standard Library using `import std` is now supported by all 3 major compilers, the library (and test program) will now use `import std` whenever the macro `BS_THREAD_POOL_IMPORT_STD` is defined, as long as C++23 is enabled, without performing any additional checks for compiler or standard library support (aside from the workaround for GCC mentioned below).
+    * The `BS::tp` enumeration is now properly defined as an `enum class` with the appropriate bitwise operators.
+    * Removed the polyfills for `std::counting_semaphore` and `std::binary_semaphore` from `BS_thread_pool.hpp`, as they are not used by the library itself, to reduce the size of the header file. If you need them, you can copy them from the test program `BS_thread_pool_test.cpp`.
+    * On Windows, if the native extensions are enabled, `WIN32_LEAN_AND_MEAN` is now defined before including `<windows.h>` to reduce compilation time.
+* Bug fixes:
+    * The system macros `major` and `minor` (from `<sys/sysmacros.h>` on Linux) or `min` and `max` (from `<windows.h>` on Windows) are now automatically undefined if they are detected, to prevent compilation errors. This was also done previously, but only under certain conditions; now it is done unconditionally, as some users reported issues. On Windows, `NOMINMAX` is now defined before including `<windows.h>`, but the `min` and `max` macros are still undefined independently.
+    * `BS::wait_deadlock` is now only exported by the module if exceptions are enabled, preventing a compiler error. See [#160](https://github.com/bshoshany/thread-pool/pull/160).
+    * Fixed a typo in `BS::thread_pool::submit_sequence()` which caused the wrong number of futures to be reserved, potentially resulting in unnecessary reallocations.
+    * `BS::multi_future<T>::wait_until` now correctly waits using the specific clock type passed in the template parameter.
+    * Fixed a bug where `reset()` failed to notify worker threads if the pool was unpaused before resetting.
+    * `get_os_thread_affinity()` and `set_os_thread_affinity()` now return `std::nullopt` and `false` (respectively) on Android, as the API is not supported. See [#163](https://github.com/bshoshany/thread-pool/pull/163).
+* Tests:
+    * The test program `BS_thread_pool_test.cpp` now prints colored output for better readability. This can be disabled by setting the `NO_COLOR` environment variable.
+    * The test program now prints out the Mandelbrot set it generates, downsampled to fit in a terminal window (at 120 character width). This will be in 24-bit color in the terminal, and in monochrome using Unicode blocks in the log file. (If `NO_COLOR` is set, the terminal output will also be in monochrome.)
+    * The test program now looks for `default_args.txt` in both the current folder and the parent folder when reading default command line arguments.
+* Documentation:
+    * Added an example in `README.md` for getting and setting process affinity.
+    * Removed the suggestion in `README.md` to use the `-pthread` flag on Linux/macOS, as it does not seem to be necessary in order to use the library, at least on the systems I tested with. If you are using a system that requires it, then you probably already know about it.
+    * Updated the instructions in `README.md` for compiling with GCC using `import BS.thread_pool`, and added instructions on how to compile the `std` module with GNU libstdc++.
+    * Fixed many typos and inconsistencies in `README.md`.
+* Known issues:
+    * At the time of this release, there is a bug in Clang with libc++ where using `std::jthread` in a C++20 module causes a compilation error. As a workaround, until the bug is fixed, the thread pool library automatically falls back to `std::thread` if it detects that Clang and libc++ are being used together with C++20 modules. This workaround can be disabled by defining `BS_THREAD_POOL_DISABLE_WORKAROUNDS` when compiling the module.
+    * At the time of this release, there is a bug when using GCC with libstdc++ on Windows via MSYS2 where the `BS.thread_pool` module doesn't compile if both native extensions and `import std` are enabled. As a workaround, until the bug is fixed, the thread pool library automatically falls back to header files if it detects that GCC and libstdc++ are being used together with the C++23 `std` module on Windows. This workaround can be disabled by defining `BS_THREAD_POOL_DISABLE_WORKAROUNDS` when compiling the module.
+* Development:
+    * The Python script I use for compiling the test program, `compile_cpp.py`, has received numerous improvements:
+        * The script now supports `import std` with GCC in addition to Clang and MSVC.
+        * The script now only recompiles the program if the source file(s), module(s), and optional additional dependencies (added using the flag `-n`/`--deps` or the `deps` field in `compile_cpp.yaml`) have changed since the binary was created. Use `-e`/`--force` to force recompilation.
+        * The script now allows disabling exceptions by either defining `disable_exceptions: true` in `compile_cpp.yaml` or using the flag `-x=true`/`--disable-exceptions=true` (the flag overrides the YAML file).
+        * The script can now compile modules independently using the `-l`/`--as-module` flag.
+        * The script can now clear the output folder using the `-b`/`--clear-output` flag (replaces the `clear_folder.py` script from the previous release).
+        * The script can now test compilation using all possible combinations of compilers and C++ standards available in the system using the `-y`/`--try-all` flag (replaces the `test_all.py` script from the previous release).
+        * The script now automatically detects the Visual Studio installation path on Windows.
+        * The script now implements a more robust mechanism for finding the `std` module.
+        * The script now prints colored output for better readability. This can be disabled by setting the `NO_COLOR` environment variable.
+        * The script no longer disables optimizations when compiling with GCC and modules (since that bug is fixed in recent versions of GCC).
+    * Added a VS Code task to compile the test program (or the active file) with all available compilers and all relevant C++ standards, but without running it, to quickly check for compiler compatibility issues.
 
 ### v5.0.0 (2024-12-19)
 
@@ -172,7 +217,7 @@ GitHub: <https://github.com/bshoshany>
 * **Development:**
     * A Python script `compile_cpp.py` has been added to the repository, in the `scripts` folder. It can be used to compile any C++ source file with different compilers on different platforms. The compilation parameters can be configured using command line arguments and/or via an optional YAML configuration file `compile_cpp.yaml` which specifies defined macros, extra compiler flags (per compiler), include folders, modules, and the output folder.
     * I wrote this script to make it easier for me to test the library with different combinations of compilers, standards, and platforms using the built-in Visual Studio Code tasks. I also included three `.vscode` folders (one for each OS) in the repository, with appropriate `c_cpp_properties.json`, `launch.json`, and `tasks.json` files that utilize this script, in case you want to use it in your own projects. However, note that this script is not meant to replace CMake or any full-fledged build system, it's just a convenient script for developing single-header libraries like this one or other small projects.
-    * The `compile_cpp.py` script also transparently handles C++20 modules and importing the C++ Standard Library as a module in C++23. Therefore, users of this library who wish to import it as a C+20 module may find this script particularly useful.
+    * The `compile_cpp.py` script also transparently handles C++20 modules and importing the C++ Standard Library as a module in C++23. Therefore, users of this library who wish to import it as a C++20 module may find this script particularly useful.
     * Another Python script `test_all.py` in the `scripts` folder replaces the old PowerShell test script. Tests are now performed in C++17, C++20, and C++23 modes, using all compilers available in the system (Clang, GCC, and/or MSVC). Since there are so many tests, the test script now no longer performs the benchmarks, as that would take too long.
     * A final Python script `clear_folder.py` in the `scripts` folder is used to clean up output and temporary folders, and integrates with VS Code tasks.
 

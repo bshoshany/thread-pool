@@ -704,8 +704,9 @@
         },
         {
             "args": [
-                "scripts/clear_folder.py",
-                "../build"
+                "scripts/compile_cpp.py",
+                "-b",
+                "-v"
             ],
             "command": "python",
             "detail": "Delete all files in the build folder.",
@@ -724,13 +725,16 @@
         },
         {
             "args": [
-                "scripts/clear_folder.py",
-                "../temp"
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-t=release",
+                "-y",
+                "-v"
             ],
             "command": "python",
-            "detail": "Delete all files in the temp folder.",
+            "detail": "Compile active file using all available compilers and all relevant C++ standards with warning and optimization flags.",
             "group": "test",
-            "label": "Clear temp folder",
+            "label": "Build all optimized (all compilers and standards)",
             "presentation": {
                 "clear": false,
                 "echo": true,
@@ -744,12 +748,17 @@
         },
         {
             "args": [
-                "scripts/test_all.py"
+                "scripts/compile_cpp.py",
+                "${file}",
+                "-t=release",
+                "-y",
+                "-r",
+                "-v"
             ],
             "command": "python",
-            "detail": "Compile and run the test program with all available compilers and all relevant C++ standards.",
+            "detail": "Compile active file using all available compilers and all relevant C++ standards with warning and optimization flags and run the program.",
             "group": "test",
-            "label": "Run all tests",
+            "label": "Build all optimized and run (all compilers and standards)",
             "presentation": {
                 "clear": false,
                 "echo": true,

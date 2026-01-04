@@ -1,0 +1,9 @@
+{
+    "C_Cpp.codeAnalysis.clangTidy.args": [
+        "--extra-arg-before=--target=x86_64-pc-windows-msvc",
+    ],
+    "C_Cpp.codeAnalysis.exclude": {
+        "misc/**": true,
+        "temp/**": true
+    }
+}

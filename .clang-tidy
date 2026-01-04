@@ -1,7 +1,8 @@
 CheckOptions:
+  cppcoreguidelines-pro-type-member-init.IgnoreArrays: true
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
   misc-const-correctness.WarnPointersAsValues: true
   misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true
-  readability-magic-numbers.IgnoredIntegerValues: 0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10
 Checks: >
     *,
     -abseil-*,
@@ -11,6 +12,10 @@ Checks: >
     -bugprone-easily-swappable-parameters,
     -bugprone-empty-catch,
     -cert-err58-cpp,
+    -clang-analyzer-alpha.*,
+    -clang-analyzer-debug.*,
+    -clang-analyzer-fuchsia.*,
+    -clang-analyzer-webkit.*,
     -cppcoreguidelines-avoid-c-arrays,
     -cppcoreguidelines-avoid-do-while,
     -cppcoreguidelines-avoid-magic-numbers,
@@ -26,15 +31,16 @@ Checks: >
     -google-*,
     -hicpp-avoid-c-arrays,
     -hicpp-braces-around-statements,
+    -hicpp-member-init,
     -hicpp-no-array-decay,
     -hicpp-signed-bitwise,
+    -hicpp-special-member-functions,
     -hicpp-use-auto,
     -hicpp-vararg,
     -linuxkernel-*,
     -llvm-*,
     -llvmlibc-*,
     -misc-definitions-in-headers,
-    -misc-use-internal-linkage,
     -modernize-avoid-bind,
     -modernize-avoid-c-arrays,
     -modernize-use-auto,
@@ -51,6 +57,8 @@ Checks: >
     -readability-braces-around-statements,
     -readability-function-cognitive-complexity,
     -readability-identifier-length,
+    -readability-magic-numbers,
+    -readability-use-concise-preprocessor-directives,
     -zircon-*,
 HeaderFileExtensions: [h, hpp, cppm]
 HeaderFilterRegex: .*

@@ -1,0 +1,6 @@
+{
+    "C_Cpp.codeAnalysis.exclude": {
+        "misc/**": true,
+        "temp/**": true
+    }
+}

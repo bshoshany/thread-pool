@@ -7,26 +7,27 @@
  *
  * @file BS_thread_pool_test.cpp
  * @author Barak Shoshany (baraksh@gmail.com) (https://baraksh.com/)
- * @version 5.0.0
- * @date 2024-12-19
- * @copyright Copyright (c) 2024 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
+ * @version 5.1.0
+ * @date 2026-01-03
+ * @copyright Copyright (c) 2021-2026 Barak Shoshany. Licensed under the MIT license. If you found this project useful, please consider starring it on GitHub! If you use this library in software of any kind, please provide a link to the GitHub repository https://github.com/bshoshany/thread-pool in the source code and documentation. If you use this library in published research, please cite it as follows: Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.1016/j.softx.2024.101687, SoftwareX 26 (2024) 101687, arXiv:2105.00613
  *
  * @brief `BS::thread_pool`: a fast, lightweight, modern, and easy-to-use C++17/C++20/C++23 thread pool library. This program tests all aspects of the library, but is not needed in order to use the library.
  */
 
-// We need to include <version> since if we're using `import std` it will not define any feature-test macros, including `__cpp_lib_modules`, which we need to check if `import std` is supported in the first place.
+// We need to include <version> since if we're using `import std` it will not define any feature-test macros.
 #ifdef __has_include
     #if __has_include(<version>)
         #include <version> // NOLINT(misc-include-cleaner)
     #endif
 #endif
 
-// If the macro `BS_THREAD_POOL_IMPORT_STD` is defined, import the C++ Standard Library as a module. Otherwise, include the relevant Standard Library header files. This is currently only officially supported by MSVC with Microsoft STL and LLVM Clang (NOT Apple Clang) with LLVM libc++. It is not supported by GCC with any standard library, or any compiler with GNU libstdc++. We also check that the feature is enabled by checking `__cpp_lib_modules`. However, MSVC defines this macro even in C++20 mode, which is not standards-compliant, so we check that we are in C++23 mode; MSVC currently reports `__cplusplus` as `202004L` for C++23 mode, so we use that value.
-#if defined(BS_THREAD_POOL_IMPORT_STD) && defined(__cpp_lib_modules) && (__cplusplus >= 202004L) && (defined(_MSC_VER) || (defined(__clang__) && defined(_LIBCPP_VERSION) && !defined(__apple_build_version__)))
+// If the macro `BS_THREAD_POOL_IMPORT_STD` is defined, import the C++ Standard Library as a module. Otherwise, include the relevant Standard Library header files.
+#if defined(BS_THREAD_POOL_IMPORT_STD) && (__cplusplus >= 202004L)
 import std;
 constexpr bool using_import_std = true;
 #else
     #include <algorithm>
+    #include <array>
     #include <atomic>
     #include <chrono>
     #include <cmath>
@@ -66,11 +67,14 @@ constexpr bool using_import_std = true;
     #ifdef __cpp_lib_format
         #include <format>
     #endif
+    #ifdef __cpp_lib_semaphore
+        #include <semaphore>
+    #endif
 constexpr bool using_import_std = false;
 #endif
 
 // If the macro `BS_THREAD_POOL_TEST_IMPORT_MODULE` is defined, import the thread pool library as a module. Otherwise, include the header file. We also check that we are in C++20 or later. We can't use `__cpp_modules` to check if modules are supported, because Clang does not define it even in C++20 mode; its support for C++20 modules is only partial, but it does seem to work for this particular library.
-#define BS_THREAD_POOL_TEST_VERSION 5, 0, 0
+#define BS_THREAD_POOL_TEST_VERSION 5, 1, 0
 #if defined(BS_THREAD_POOL_TEST_IMPORT_MODULE) && (__cplusplus >= 202002L)
 import BS.thread_pool;
 static_assert(BS::thread_pool_module, "The flag BS::thread_pool_module is set to false, but the library was imported as a module. Aborting compilation.");
@@ -85,25 +89,359 @@ static_assert(BS::thread_pool_version == BS::version(BS_THREAD_POOL_TEST_VERSION
 static_assert(BS::thread_pool_native_extensions, "Cannot test the native extensions, as the thread pool module was compiled without enabling them using the macro BS_THREAD_POOL_NATIVE_EXTENSIONS. Aborting compilation.");
 #endif
 
-// A global synced stream which prints to the standard output and/or the log file.
-BS::synced_stream sync_out;
+namespace {
+// A global synced stream which prints to the standard output.
+BS::synced_stream sync_cout;
+
+// A global synced stream which prints to a log file.
+BS::synced_stream sync_log;
+
+// A flag to enable or disable printing to the standard output.
+bool use_stdout = true;
+
+// A flag to enable or disable printing to the log file.
+bool use_log = false;
+
+// A flag to enable or disable colored output.
+bool no_color = false;
+
+// ================================
+// std::counting_semaphore polyfill
+// ================================
+
+#ifdef __cpp_lib_semaphore
+using std::binary_semaphore;
+using std::counting_semaphore;
+#else
+/**
+ * @brief A polyfill for `std::counting_semaphore`, to be used if C++20 features are not available. A `counting_semaphore` is a synchronization primitive that allows more than one concurrent access to the same resource. The number of concurrent accessors is limited by the semaphore's counter, which is decremented when a thread acquires the semaphore and incremented when a thread releases the semaphore. If the counter is zero, a thread trying to acquire the semaphore will be blocked until another thread releases the semaphore.
+ *
+ * @tparam LeastMaxValue The least maximum value of the counter. (In this implementation, it is also the actual maximum value.)
+ */
+template <std::ptrdiff_t LeastMaxValue = std::numeric_limits<std::ptrdiff_t>::max()>
+class [[nodiscard]] counting_semaphore
+{
+    static_assert(LeastMaxValue >= 0, "The least maximum value for a counting semaphore must not be negative.");
+
+public:
+    /**
+     * @brief Construct a new counting semaphore with the given initial counter value.
+     *
+     * @param desired The initial counter value.
+     */
+    constexpr explicit counting_semaphore(const std::ptrdiff_t desired) : counter(desired) {}
+
+    // The copy and move constructors and assignment operators are deleted. The semaphore cannot be copied or moved.
+    counting_semaphore(const counting_semaphore&) = delete;
+    counting_semaphore(counting_semaphore&&) = delete;
+    counting_semaphore& operator=(const counting_semaphore&) = delete;
+    counting_semaphore& operator=(counting_semaphore&&) = delete;
+    ~counting_semaphore() = default;
+
+    /**
+     * @brief Returns the internal counter's maximum possible value, which in this implementation is equal to `LeastMaxValue`.
+     *
+     * @return The internal counter's maximum possible value.
+     */
+    [[nodiscard]] static constexpr std::ptrdiff_t max() noexcept
+    {
+        return LeastMaxValue;
+    }
+
+    /**
+     * @brief Atomically decrements the internal counter by 1 if it is greater than 0; otherwise blocks until it is greater than 0 and can successfully decrement the internal counter.
+     */
+    void acquire()
+    {
+        std::unique_lock lock(mutex);
+        cv.wait(lock,
+            [this]
+            {
+                return counter > 0;
+            });
+        --counter;
+    }
+
+    /**
+     * @brief Atomically increments the internal counter. Any thread(s) waiting for the counter to be greater than 0, such as due to being blocked in `acquire()`, will subsequently be unblocked.
+     *
+     * @param update The amount to increment the internal counter by. Defaults to 1.
+     */
+    void release(const std::ptrdiff_t update = 1)
+    {
+        {
+            const std::scoped_lock lock(mutex);
+            counter += update;
+        }
+        cv.notify_all();
+    }
+
+    /**
+     * @brief Tries to atomically decrement the internal counter by 1 if it is greater than 0; no blocking occurs regardless.
+     *
+     * @return `true` if decremented the internal counter, `false` otherwise.
+     */
+    bool try_acquire()
+    {
+        std::scoped_lock lock(mutex);
+        if (counter > 0)
+        {
+            --counter;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Tries to atomically decrement the internal counter by 1 if it is greater than 0; otherwise blocks until it is greater than 0 and can successfully decrement the internal counter, or the `rel_time` duration has been exceeded.
+     *
+     * @tparam Rep An arithmetic type representing the number of ticks to wait.
+     * @tparam Period An `std::ratio` representing the length of each tick in seconds.
+     * @param rel_time The duration the function must wait. Note that the function may wait for longer.
+     * @return `true` if decremented the internal counter, `false` otherwise.
+     */
+    template <class Rep, class Period>
+    bool try_acquire_for(const std::chrono::duration<Rep, Period>& rel_time)
+    {
+        std::unique_lock lock(mutex);
+        if (!cv.wait_for(lock, rel_time,
+                [this]
+                {
+                    return counter > 0;
+                }))
+            return false;
+        --counter;
+        return true;
+    }
+
+    /**
+     * @brief Tries to atomically decrement the internal counter by 1 if it is greater than 0; otherwise blocks until it is greater than 0 and can successfully decrement the internal counter, or the `abs_time` time point has been passed.
+     *
+     * @tparam Clock The type of the clock used to measure time.
+     * @tparam Duration An `std::chrono::duration` type used to indicate the time point.
+     * @param abs_time The earliest time the function must wait until. Note that the function may wait for longer.
+     * @return `true` if decremented the internal counter, `false` otherwise.
+     */
+    template <class Clock, class Duration>
+    bool try_acquire_until(const std::chrono::time_point<Clock, Duration>& abs_time)
+    {
+        std::unique_lock lock(mutex);
+        if (!cv.wait_until(lock, abs_time,
+                [this]
+                {
+                    return counter > 0;
+                }))
+            return false;
+        --counter;
+        return true;
+    }
+
+private:
+    /**
+     * @brief A mutex used to synchronize access to the counter.
+     */
+    mutable std::mutex mutex;
+
+    /**
+     * @brief A condition variable used to wait for the counter.
+     */
+    std::condition_variable cv;
+
+    /**
+     * @brief The semaphore's counter.
+     */
+    std::ptrdiff_t counter;
+};
+
+/**
+ * @brief A polyfill for `std::binary_semaphore`, to be used if C++20 features are not available.
+ */
+using binary_semaphore = counting_semaphore<1>;
+#endif
 
 // ======================
 // Functions for printing
 // ======================
 
 /**
- * @brief Print a stylized header.
+ * @brief An enumeration class of ANSI escape codes for formatting terminal output.
+ */
+enum class ansi : std::uint8_t
+{
+    reset = 0,
+    bold = 1,
+    dim = 2,
+    italic = 3,
+    underline = 4,
+    invert = 7,
+    strike = 9,
+    double_underline = 21,
+    normal_intensity = 22,
+    not_italic = 23,
+    not_underlined = 24,
+    fg_black = 30,
+    fg_red = 31,
+    fg_green = 32,
+    fg_yellow = 33,
+    fg_blue = 34,
+    fg_magenta = 35,
+    fg_cyan = 36,
+    fg_white = 37,
+    bg_black = 40,
+    bg_red = 41,
+    bg_green = 42,
+    bg_yellow = 43,
+    bg_blue = 44,
+    bg_magenta = 45,
+    bg_cyan = 46,
+    bg_white = 47,
+    fg_bright_black = 90,
+    fg_bright_red = 91,
+    fg_bright_green = 92,
+    fg_bright_yellow = 93,
+    fg_bright_blue = 94,
+    fg_bright_magenta = 95,
+    fg_bright_cyan = 96,
+    fg_bright_white = 97,
+    bg_bright_black = 100,
+    bg_bright_red = 101,
+    bg_bright_green = 102,
+    bg_bright_yellow = 103,
+    bg_bright_blue = 104,
+    bg_bright_magenta = 105,
+    bg_bright_cyan = 106,
+    bg_bright_white = 107
+};
+
+// Constants for ANSI styles used in this program.
+constexpr std::initializer_list<ansi> ansi_error = {ansi::fg_bright_red};
+constexpr std::initializer_list<ansi> ansi_info = {ansi::fg_bright_blue};
+constexpr std::initializer_list<ansi> ansi_separator = {ansi::fg_bright_yellow};
+constexpr std::initializer_list<ansi> ansi_subtitle = {ansi::fg_bright_cyan, ansi::bold};
+constexpr std::initializer_list<ansi> ansi_success = {ansi::fg_bright_green};
+constexpr std::initializer_list<ansi> ansi_title = {ansi::fg_bright_white, ansi::bold};
+constexpr std::initializer_list<ansi> ansi_title_italic = {ansi::fg_bright_white, ansi::bold, ansi::italic};
+constexpr std::initializer_list<ansi> ansi_title_underline = {ansi::fg_bright_white, ansi::bold, ansi::underline};
+
+/**
+ * @brief Output an ANSI escape code to a stream.
+ *
+ * @param out The output stream.
+ * @param code The ANSI code.
+ * @return The output stream.
+ */
+inline std::ostream& operator<<(std::ostream& out, const ansi code)
+{
+    if (no_color)
+        return out;
+    return out << "\033[" << static_cast<std::uint32_t>(code) << 'm';
+}
+
+/**
+ * @brief Output multiple ANSI escape codes to a stream.
+ *
+ * @param out The output stream.
+ * @param codes The ANSI codes.
+ * @return The output stream.
+ */
+inline std::ostream& operator<<(std::ostream& out, const std::initializer_list<ansi> codes)
+{
+    if (no_color)
+        return out;
+    out << "\033[";
+    bool first = true;
+    for (const ansi code : codes)
+    {
+        if (!first)
+            out << ';';
+        else
+            first = false;
+        out << static_cast<std::uint32_t>(code);
+    }
+    return out << 'm';
+}
+
+/**
+ * @brief Print any number of items to the standard output and/or the log file.
+ *
+ * @tparam T The types of the items.
+ * @param items The items to print.
+ */
+template <typename... T>
+void log(const T&... items)
+{
+    if (use_stdout)
+        sync_cout.print(items...);
+    if (use_log)
+        sync_log.print(items...);
+}
+
+/**
+ * @brief Print any number of items to the standard output and/or the log file, followed by a newline character.
+ *
+ * @tparam T The types of the items.
+ * @param items The items to print.
+ */
+template <typename... T>
+void logln(T&&... items)
+{
+    log(std::forward<T>(items)..., '\n');
+}
+
+/**
+ * @brief Print any number of items to the standard output and/or the log file with the specified ANSI styles. The ANSI codes are only printed to the standard output, but both streams receive the printed items.
+ *
+ * @tparam T The types of the items.
+ * @param codes The ANSI codes.
+ * @param items The items to print.
+ */
+template <typename... T>
+void log_ansi(const std::initializer_list<ansi> codes, const T&... items)
+{
+    if (use_stdout)
+        sync_cout.print(codes, items..., ansi::reset);
+    if (use_log)
+        sync_log.print(items...);
+}
+
+/**
+ * @brief Print any number of items to the standard output and/or the log file with the specified ANSI styles, followed by a newline character. The ANSI codes are only printed to the standard output, but both streams receive the printed items.
+ *
+ * @tparam T The types of the items.
+ * @param codes The ANSI codes.
+ * @param items The items to print.
+ */
+template <typename... T>
+void logln_ansi(const std::initializer_list<ansi> codes, T&&... items)
+{
+    log_ansi(codes, std::forward<T>(items)..., '\n');
+}
+
+/**
+ * @brief Print a stylized header with the specified ANSI styles.
  *
  * @param text The text of the header. Will appear between two lines.
  * @param symbol The symbol to use for the lines. Default is '='.
+ * @param codes The ANSI codes. Default is `ansi_separator`.
  */
-void print_header(const std::string_view text, const char symbol = '=')
+void print_header(const std::string_view text, const char symbol = '=', const std::initializer_list<ansi> codes = ansi_separator)
 {
-    sync_out.println(BS::synced_stream::flush);
-    sync_out.println(std::string(text.length(), symbol));
-    sync_out.println(text);
-    sync_out.println(std::string(text.length(), symbol));
+    const std::string separator(text.length(), symbol);
+    logln_ansi(codes, BS::synced_stream::flush, '\n', separator, '\n', text, '\n', separator);
+}
+
+/**
+ * @brief Print a key followed by values with different ANSI styles.
+ *
+ * @tparam T The types of the values.
+ * @param key The key.
+ * @param values The values.
+ */
+template <typename... T>
+void print_key_values(const std::string_view key, T&&... values)
+{
+    log_ansi(ansi_title, key);
+    logln_ansi(ansi_subtitle, std::forward<T>(values)...);
 }
 
 // =================================
@@ -128,12 +466,12 @@ void check(const bool condition)
 {
     if (condition)
     {
-        sync_out.println("-> passed.");
+        logln_ansi(ansi_success, "-> passed.");
         ++test_results::tests_succeeded;
     }
     else
     {
-        sync_out.println("-> FAILED!");
+        logln_ansi(ansi_error, "-> FAILED!");
         ++test_results::tests_failed;
     }
 }
@@ -141,13 +479,15 @@ void check(const bool condition)
 /**
  * @brief Check if the expected result has been obtained, report the result, and keep count of the total number of successes and failures.
  *
- * @param condition The condition to check.
+ * @param expected The expected result.
+ * @param obtained The obtained result.
  */
 template <typename T1, typename T2>
 void check(const T1& expected, const T2& obtained)
 {
-    sync_out.print("- Expected: ", expected, ", obtained: ", obtained, ' ');
-    check(expected == static_cast<T1>(obtained));
+    const bool passed = (expected == static_cast<T1>(obtained));
+    log_ansi(passed ? ansi_success : ansi_error, "- Expected: ", expected, ", obtained: ", obtained, ' ');
+    check(passed);
 }
 
 /**
@@ -295,10 +635,10 @@ std::string detect_cpp_standard()
     return "C++17";
 #elif __cplusplus == 202002L
     return "C++20";
-#elif (__cplusplus == 202302L) || (__cplusplus == 202004L) // MSVC currently uses 202004L for /std:c++latest.
+#elif (__cplusplus == 202302L) || (defined(_MSC_VER) && __cplusplus > 202002L) // MSVC with `/std:c++latest` only guarantees `__cplusplus` is "at least one higher" than the highest supported version.
     return "C++23";
 #else
-    return make_string("Other (__cplusplus = ", __cplusplus, ")");
+    return "Other";
 #endif
 }
 
@@ -351,87 +691,87 @@ std::string detect_os()
  */
 void print_features()
 {
-    constexpr int width = 33;
-    sync_out.print(std::left);
+    constexpr int width = 35;
+    log(std::left);
 
-    sync_out.print(std::setw(width), "__cpp_concepts:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_concepts:");
 #ifdef __cpp_concepts
-    sync_out.println(__cpp_concepts);
+    logln_ansi(ansi_subtitle, __cpp_concepts);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_exceptions:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_exceptions:");
 #ifdef __cpp_exceptions
-    sync_out.println(__cpp_exceptions);
+    logln_ansi(ansi_subtitle, __cpp_exceptions);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_impl_three_way_comparison:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_impl_three_way_comparison:");
 #ifdef __cpp_impl_three_way_comparison
-    sync_out.println(__cpp_impl_three_way_comparison);
+    logln_ansi(ansi_subtitle, __cpp_impl_three_way_comparison);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_format:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_format:");
 #ifdef __cpp_lib_format
-    sync_out.println(__cpp_lib_format);
+    logln_ansi(ansi_subtitle, __cpp_lib_format);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_int_pow2:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_int_pow2:");
 #ifdef __cpp_lib_int_pow2
-    sync_out.println(__cpp_lib_int_pow2);
+    logln_ansi(ansi_subtitle, __cpp_lib_int_pow2);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_jthread:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_jthread:");
 #ifdef __cpp_lib_jthread
-    sync_out.println(__cpp_lib_jthread);
+    logln_ansi(ansi_subtitle, __cpp_lib_jthread);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_modules:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_modules:");
 #ifdef __cpp_lib_modules
-    sync_out.println(__cpp_lib_modules);
+    logln_ansi(ansi_subtitle, __cpp_lib_modules);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_move_only_function:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_move_only_function:");
 #ifdef __cpp_lib_move_only_function
-    sync_out.println(__cpp_lib_move_only_function);
+    logln_ansi(ansi_subtitle, __cpp_lib_move_only_function);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_lib_semaphore:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_lib_semaphore:");
 #ifdef __cpp_lib_semaphore
-    sync_out.println(__cpp_lib_semaphore);
+    logln_ansi(ansi_subtitle, __cpp_lib_semaphore);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__cpp_modules:");
+    log_ansi(ansi_title, std::setw(width), "* __cpp_modules:");
 #ifdef __cpp_modules
-    sync_out.println(__cpp_modules);
+    logln_ansi(ansi_subtitle, __cpp_modules);
 #else
-    sync_out.println("N/A");
+    logln_ansi(ansi_subtitle, "N/A");
 #endif
 
-    sync_out.print(std::setw(width), "__has_include(<version>):");
+    log_ansi(ansi_title, std::setw(width), "* __has_include(<version>):");
 #if __has_include(<version>)
-    sync_out.println("true");
+    logln_ansi(ansi_subtitle, "true");
 #else
-    sync_out.println("false");
+    logln_ansi(ansi_subtitle, "false");
 #endif
 
-    sync_out.println(std::right);
+    logln(std::right);
 }
 
 // =========================================
@@ -448,7 +788,7 @@ std::vector<std::thread::id> obtain_unique_threads(BS::thread_pool<>& pool)
     const std::size_t num_tasks = pool.get_thread_count() * 2;
     std::vector<std::thread::id> thread_ids(num_tasks);
     std::atomic<std::size_t> total_count = 0;
-    BS::counting_semaphore sem(0);
+    counting_semaphore sem(0);
     for (std::thread::id& tid : thread_ids)
     {
         pool.detach_task(
@@ -473,12 +813,12 @@ std::vector<std::thread::id> obtain_unique_threads(BS::thread_pool<>& pool)
 void check_constructor()
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that the thread pool reports a number of threads equal to the hardware concurrency...");
+    logln("Checking that the thread pool reports a number of threads equal to the hardware concurrency...");
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
-    sync_out.println("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
+    logln("Checking that the manually counted number of unique thread IDs is equal to the reported number of threads...");
     const std::vector<std::thread::id> unique_threads = obtain_unique_threads(pool);
     check(pool.get_thread_count(), unique_threads.size());
-    sync_out.println("Checking that the unique thread IDs obtained are the same as those reported by get_thread_ids()...");
+    logln("Checking that the unique thread IDs obtained are the same as those reported by get_thread_ids()...");
     std::vector<std::thread::id> threads_from_pool = pool.get_thread_ids();
     std::sort(threads_from_pool.begin(), threads_from_pool.end());
     check(threads_from_pool == unique_threads);
@@ -491,14 +831,14 @@ void check_reset()
 {
     BS::thread_pool pool;
     pool.reset(static_cast<std::size_t>(std::thread::hardware_concurrency()) * 2);
-    sync_out.println("Checking that after reset() the thread pool reports a number of threads equal to double the hardware concurrency...");
+    logln("Checking that after reset() the thread pool reports a number of threads equal to double the hardware concurrency...");
     check(std::thread::hardware_concurrency() * 2, pool.get_thread_count());
-    sync_out.println("Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
+    logln("Checking that after reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), obtain_unique_threads(pool).size());
     pool.reset(std::thread::hardware_concurrency());
-    sync_out.println("Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...");
+    logln("Checking that after a second reset() the thread pool reports a number of threads equal to the hardware concurrency...");
     check(std::thread::hardware_concurrency(), pool.get_thread_count());
-    sync_out.println("Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
+    logln("Checking that after a second reset() the manually counted number of unique thread IDs is equal to the reported number of threads...");
     check(pool.get_thread_count(), obtain_unique_threads(pool).size());
 }
 
@@ -545,7 +885,7 @@ private:
 void check_task(const std::string_view which_func)
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that ", which_func, " works for a function with no arguments or return value...");
+    logln("Checking that ", which_func, " works for a function with no arguments or return value...");
     {
         bool flag = false;
         const auto func = [&flag]
@@ -563,7 +903,7 @@ void check_task(const std::string_view which_func)
         }
         check(flag);
     }
-    sync_out.println("Checking that ", which_func, " works for a function with one argument and no return value...");
+    logln("Checking that ", which_func, " works for a function with one argument and no return value...");
     {
         bool flag = false;
         const auto func = [](bool& flag_)
@@ -590,7 +930,7 @@ void check_task(const std::string_view which_func)
         }
         check(flag);
     }
-    sync_out.println("Checking that ", which_func, " works for a function with two arguments and no return value...");
+    logln("Checking that ", which_func, " works for a function with two arguments and no return value...");
     {
         bool flag1 = false;
         bool flag2 = false;
@@ -620,7 +960,7 @@ void check_task(const std::string_view which_func)
     }
     if (which_func == "submit_task()")
     {
-        sync_out.println("Checking that submit_task() works for a function with no arguments and a return value...");
+        logln("Checking that submit_task() works for a function with no arguments and a return value...");
         {
             bool flag = false;
             const auto func = [&flag]
@@ -630,7 +970,7 @@ void check_task(const std::string_view which_func)
             std::future<bool> flag_future = pool.submit_task(func);
             check(flag_future.get() && flag);
         }
-        sync_out.println("Checking that submit_task() works for a function with one argument and a return value...");
+        logln("Checking that submit_task() works for a function with one argument and a return value...");
         {
             bool flag = false;
             const auto func = [](bool& flag_)
@@ -644,7 +984,7 @@ void check_task(const std::string_view which_func)
                 });
             check(flag_future.get() && flag);
         }
-        sync_out.println("Checking that submit_task() works for a function with two arguments and a return value...");
+        logln("Checking that submit_task() works for a function with two arguments and a return value...");
         {
             bool flag1 = false;
             bool flag2 = false;
@@ -660,7 +1000,7 @@ void check_task(const std::string_view which_func)
             check(flag_future.get() && flag1 && flag2);
         }
     }
-    sync_out.println("Checking that ", which_func, " does not create unnecessary copies of the function object...");
+    logln("Checking that ", which_func, " does not create unnecessary copies of the function object...");
     {
         bool copied = false;
         bool moved = false;
@@ -680,10 +1020,10 @@ void check_task(const std::string_view which_func)
         }
         check(!copied && moved);
     }
-    sync_out.println("Checking that ", which_func, " correctly accepts arguments passed by value, reference, and constant reference...");
+    logln("Checking that ", which_func, " correctly accepts arguments passed by value, reference, and constant reference...");
     {
         {
-            sync_out.println("Value:");
+            logln("Value:");
             const std::int64_t pass_me_by_value = 0;
             const auto func_value = [](std::int64_t passed_by_value)
             {
@@ -711,7 +1051,7 @@ void check_task(const std::string_view which_func)
             check(pass_me_by_value == 0);
         }
         {
-            sync_out.println("Reference:");
+            logln("Reference:");
             std::int64_t pass_me_by_ref = 0;
             const auto func_ref = [](std::int64_t& passed_by_ref)
             {
@@ -738,9 +1078,9 @@ void check_task(const std::string_view which_func)
             check(pass_me_by_ref == 1);
         }
         {
-            sync_out.println("Constant reference:");
+            logln("Constant reference:");
             std::int64_t pass_me_by_cref = 0;
-            BS::binary_semaphore sem(0);
+            binary_semaphore sem(0);
             const auto func_cref = [&sem](const std::int64_t& passed_by_cref)
             {
                 sem.acquire();
@@ -880,7 +1220,7 @@ private:
 void check_member_function()
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that detach_task() works for a member function with no arguments or return value...");
+    logln("Checking that detach_task() works for a member function with no arguments or return value...");
     {
         flag_class flag(pool);
         pool.detach_task(
@@ -891,7 +1231,7 @@ void check_member_function()
         pool.wait();
         check(flag.get_flag());
     }
-    sync_out.println("Checking that detach_task() works for a member function with one argument and no return value...");
+    logln("Checking that detach_task() works for a member function with one argument and no return value...");
     {
         flag_class flag(pool);
         pool.detach_task(
@@ -902,7 +1242,7 @@ void check_member_function()
         pool.wait();
         check(flag.get_flag());
     }
-    sync_out.println("Checking that submit_task() works for a member function with no arguments or return value...");
+    logln("Checking that submit_task() works for a member function with no arguments or return value...");
     {
         flag_class flag(pool);
         pool.submit_task(
@@ -913,7 +1253,7 @@ void check_member_function()
             .wait();
         check(flag.get_flag());
     }
-    sync_out.println("Checking that submit_task() works for a member function with one argument and no return value...");
+    logln("Checking that submit_task() works for a member function with one argument and no return value...");
     {
         flag_class flag(pool);
         pool.submit_task(
@@ -924,7 +1264,7 @@ void check_member_function()
             .wait();
         check(flag.get_flag());
     }
-    sync_out.println("Checking that submit_task() works for a member function with no arguments and a return value...");
+    logln("Checking that submit_task() works for a member function with no arguments and a return value...");
     {
         flag_class flag(pool);
         std::future<bool> flag_future = pool.submit_task(
@@ -934,7 +1274,7 @@ void check_member_function()
             });
         check(flag_future.get() && flag.get_flag());
     }
-    sync_out.println("Checking that submit_task() works for a member function with one argument and a return value...");
+    logln("Checking that submit_task() works for a member function with one argument and a return value...");
     {
         flag_class flag(pool);
         std::future<bool> flag_future = pool.submit_task(
@@ -952,32 +1292,32 @@ void check_member_function()
 void check_member_function_within_object()
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that detach_task() works within an object for a member function with no arguments or return value...");
+    logln("Checking that detach_task() works within an object for a member function with no arguments or return value...");
     {
         flag_class flag(pool);
         flag.detach_test_flag_no_args();
     }
-    sync_out.println("Checking that detach_task() works within an object for a member function with one argument and no return value...");
+    logln("Checking that detach_task() works within an object for a member function with one argument and no return value...");
     {
         flag_class flag(pool);
         flag.detach_test_flag_one_arg();
     }
-    sync_out.println("Checking that submit_task() works within an object for a member function with no arguments or return value...");
+    logln("Checking that submit_task() works within an object for a member function with no arguments or return value...");
     {
         flag_class flag(pool);
         flag.submit_test_flag_no_args();
     }
-    sync_out.println("Checking that submit_task() works within an object for a member function with one argument and no return value...");
+    logln("Checking that submit_task() works within an object for a member function with one argument and no return value...");
     {
         flag_class flag(pool);
         flag.submit_test_flag_one_arg();
     }
-    sync_out.println("Checking that submit_task() works within an object for a member function with no arguments and a return value...");
+    logln("Checking that submit_task() works within an object for a member function with no arguments and a return value...");
     {
         flag_class flag(pool);
         flag.submit_test_flag_no_args_return();
     }
-    sync_out.println("Checking that submit_task() works within an object for a member function with one argument and a return value...");
+    logln("Checking that submit_task() works within an object for a member function with one argument and a return value...");
     {
         flag_class flag(pool);
         flag.submit_test_flag_one_arg_return();
@@ -991,7 +1331,7 @@ void normal_func()
     check_callables_flag = true;
 }
 
-struct functor
+struct function_object
 {
     void operator()()
     {
@@ -1014,23 +1354,23 @@ void check_callables()
 {
     BS::thread_pool pool;
 
-    sync_out.println("Checking normal function...");
+    logln("Checking normal function...");
     pool.submit_task(normal_func).wait();
     check(check_callables_flag);
 
-    sync_out.println("Checking function pointer...");
+    logln("Checking function pointer...");
     check_callables_flag = false;
-    void (*const func_ptr)() = normal_func;
+    void (*const func_ptr)() = normal_func; // NOLINT(misc-const-correctness)
     pool.submit_task(func_ptr).wait();
     check(check_callables_flag);
 
-    sync_out.println("Checking pointer to static member function...");
+    logln("Checking pointer to static member function...");
     check_callables_flag = false;
     auto member_func_ptr = has_member_function::member_function;
     pool.submit_task(member_func_ptr).wait();
     check(check_callables_flag);
 
-    sync_out.println("Checking lambda expression...");
+    logln("Checking lambda expression...");
     check_callables_flag = false;
     const auto lambda = []
     {
@@ -1039,7 +1379,7 @@ void check_callables()
     pool.submit_task(lambda).wait();
     check(check_callables_flag);
 
-    sync_out.println("Checking std::function...");
+    logln("Checking std::function...");
     check_callables_flag = false;
     const std::function<void()> function = []
     {
@@ -1049,7 +1389,7 @@ void check_callables()
     check(check_callables_flag);
 
 #ifdef __cpp_lib_move_only_function
-    sync_out.println("Checking std::move_only_function...");
+    logln("Checking std::move_only_function...");
     check_callables_flag = false;
     std::move_only_function<void()> move_only_function = []
     {
@@ -1058,10 +1398,10 @@ void check_callables()
     pool.submit_task(std::move(move_only_function)).wait();
     check(check_callables_flag);
 #else
-    sync_out.println("Note: std::move_only_function not available, skipping the corresponding test.");
+    logln_ansi(ansi_info, "Note: std::move_only_function not available, skipping the corresponding test.");
 #endif
 
-    sync_out.println("Checking std::bind...");
+    logln("Checking std::bind...");
     check_callables_flag = false;
     const auto lambda_for_bind = [](std::atomic<bool>& flag)
     {
@@ -1070,10 +1410,10 @@ void check_callables()
     pool.submit_task(std::bind(lambda_for_bind, std::ref(check_callables_flag))).wait();
     check(check_callables_flag);
 
-    sync_out.println("Checking functor...");
+    logln("Checking function object...");
     check_callables_flag = false;
-    const functor functor_instance;
-    pool.submit_task(functor_instance).wait();
+    const function_object func_obj_instance;
+    pool.submit_task(func_obj_instance).wait();
     check(check_callables_flag);
 }
 
@@ -1099,7 +1439,7 @@ void check_wait()
                 flags[i] = true;
             });
     }
-    sync_out.println("Waiting for tasks...");
+    logln("Waiting for tasks...");
     pool.wait();
     check(all_flags_set(flags));
 }
@@ -1112,22 +1452,22 @@ void check_wait_blocks()
     constexpr std::chrono::milliseconds sleep_time(100);
     constexpr std::size_t num_waiting_tasks = 4;
     BS::thread_pool pool;
-    BS::binary_semaphore sem(0);
-    sync_out.println("Checking that wait() correctly blocks all external threads that call it...");
+    binary_semaphore sem(0);
+    logln("Checking that wait() correctly blocks all external threads that call it...");
     pool.detach_task(
         [&sem]
         {
-            sync_out.println("Task submitted to pool 1 and waiting to be released...");
+            logln("Task submitted to pool 1 and waiting to be released...");
             sem.acquire();
-            sync_out.println("Task released.");
+            logln("Task released.");
         });
     BS::thread_pool temp_pool(num_waiting_tasks);
     std::vector<std::atomic<bool>> flags(num_waiting_tasks);
     const auto waiting_task = [&flags, &pool](const std::size_t task_num)
     {
-        sync_out.println("Task ", task_num, " submitted to pool 2 and waiting for pool 1's task to finish...");
+        logln("Task ", task_num, " submitted to pool 2 and waiting for pool 1's task to finish...");
         pool.wait();
-        sync_out.println("Task ", task_num, " finished waiting.");
+        logln("Task ", task_num, " finished waiting.");
         flags[task_num] = true;
     };
     for (std::size_t i = 0; i < num_waiting_tasks; ++i)
@@ -1153,7 +1493,7 @@ void check_wait_for()
     constexpr std::chrono::milliseconds long_sleep_time(250);
     constexpr std::chrono::milliseconds short_sleep_time(10);
     BS::thread_pool pool;
-    sync_out.println("Checking that wait_for() works...");
+    logln("Checking that wait_for() works...");
     std::atomic<bool> done = false;
     pool.detach_task(
         [&done, long_sleep_time]
@@ -1161,10 +1501,10 @@ void check_wait_for()
             std::this_thread::sleep_for(long_sleep_time);
             done = true;
         });
-    sync_out.println("Task that lasts ", long_sleep_time.count(), "ms submitted. Waiting for ", short_sleep_time.count(), "ms...");
+    logln("Task that lasts ", long_sleep_time.count(), "ms submitted. Waiting for ", short_sleep_time.count(), "ms...");
     pool.wait_for(short_sleep_time);
     check(!done);
-    sync_out.println("Waiting for ", long_sleep_time.count() * 2, "ms...");
+    logln("Waiting for ", long_sleep_time.count() * 2, "ms...");
     pool.wait_for(long_sleep_time * 2);
     check(done);
 }
@@ -1177,7 +1517,7 @@ void check_wait_until()
     constexpr std::chrono::milliseconds long_sleep_time(250);
     constexpr std::chrono::milliseconds short_sleep_time(10);
     BS::thread_pool pool;
-    sync_out.println("Checking that wait_until() works...");
+    logln("Checking that wait_until() works...");
     std::atomic<bool> done = false;
     pool.detach_task(
         [&done, long_sleep_time]
@@ -1186,10 +1526,10 @@ void check_wait_until()
             done = true;
         });
     const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-    sync_out.println("Task that lasts ", long_sleep_time.count(), "ms submitted. Waiting until ", short_sleep_time.count(), "ms from submission time...");
+    logln("Task that lasts ", long_sleep_time.count(), "ms submitted. Waiting until ", short_sleep_time.count(), "ms from submission time...");
     pool.wait_until(now + short_sleep_time);
     check(!done);
-    sync_out.println("Waiting until ", long_sleep_time.count() * 2, "ms from submission time...");
+    logln("Waiting until ", long_sleep_time.count() * 2, "ms from submission time...");
     pool.wait_until(now + long_sleep_time * 2);
     check(done);
 }
@@ -1204,7 +1544,7 @@ void check_wait_multiple_deadlock()
 {
     constexpr std::chrono::milliseconds sleep_time(500);
     constexpr std::size_t n_waiting_tasks = 1000;
-    sync_out.println("Checking for deadlocks when waiting for tasks...");
+    logln("Checking for deadlocks when waiting for tasks...");
     BS::thread_pool pool(1);
     pool.detach_task(
         [sleep_time]
@@ -1228,17 +1568,17 @@ void check_wait_multiple_deadlock()
         check_wait_multiple_deadlock_pool.wait_for(sleep_time * 2);
         if (count == n_waiting_tasks)
         {
-            sync_out.println("All waiting tasks successfully finished!");
+            logln_ansi(ansi_success, "All waiting tasks successfully finished!");
             passed = true;
             break;
         }
         if (count == old_count)
         {
-            sync_out.println("Error: deadlock detected!");
+            logln_ansi(ansi_error, "Error: deadlock detected!");
             passed = false;
             break;
         }
-        sync_out.println(count, " tasks out of ", n_waiting_tasks, " finished waiting...");
+        logln(count, " tasks out of ", n_waiting_tasks, " finished waiting...");
     }
     check(passed);
 }
@@ -1253,7 +1593,7 @@ BS::wdc_thread_pool check_wait_self_deadlock_pool;
 void check_wait_self_deadlock()
 {
     constexpr std::chrono::milliseconds sleep_time(100);
-    sync_out.println("Checking for deadlocks when waiting from within a thread of the same pool...");
+    logln("Checking for deadlocks when waiting from within a thread of the same pool...");
     std::atomic<bool> passed = false;
     check_wait_self_deadlock_pool.detach_task(
         [&passed]
@@ -1288,13 +1628,13 @@ void check_wait_self_deadlock()
  */
 bool check_loop_no_return(BS::thread_pool<>& pool, const std::int64_t random_start, const std::int64_t random_end, const std::size_t num_tasks, const std::string_view which_func)
 {
-    sync_out.println("Verifying that ", which_func, " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices exactly once...");
+    logln("Verifying that ", which_func, " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices exactly once...");
     const std::size_t num_indices = static_cast<std::size_t>(random_end - random_start);
     std::vector<std::atomic<std::int64_t>> flags(num_indices);
     std::atomic<bool> indices_out_of_range = false;
     const auto loop = [&flags, random_start, random_end, &indices_out_of_range](const std::int64_t idx)
     {
-        if (idx < random_start || idx > random_end)
+        if (idx < random_start || idx >= random_end)
             indices_out_of_range = true;
         else
             ++flags[static_cast<std::size_t>(idx - random_start)];
@@ -1310,7 +1650,7 @@ bool check_loop_no_return(BS::thread_pool<>& pool, const std::int64_t random_sta
     }
     if (indices_out_of_range)
     {
-        sync_out.println("Error: Loop indices out of range!");
+        logln_ansi(ansi_error, "Error: Loop indices out of range!");
         return false;
     }
     return all_flags_equal(flags, 1);
@@ -1334,11 +1674,11 @@ void check_loop()
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
         check(check_loop_no_return(pool, indices.first, indices.second, random<std::size_t>(1, pool.get_thread_count()), "submit_loop()"));
     }
-    sync_out.println("Verifying that detach_loop() with identical start and end indices does nothing...");
+    logln("Verifying that detach_loop() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.detach_loop(index, index,
             [&count](const std::int64_t)
             {
@@ -1347,11 +1687,11 @@ void check_loop()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_loop() with identical start and end indices does nothing...");
+    logln("Verifying that submit_loop() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.submit_loop(index, index,
                 [&count](const std::int64_t)
                 {
@@ -1360,11 +1700,11 @@ void check_loop()
             .wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that detach_loop() with end index smaller than the start index does nothing...");
+    logln("Verifying that detach_loop() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.detach_loop(indices.second, indices.first,
             [&count](const std::int64_t)
             {
@@ -1373,11 +1713,11 @@ void check_loop()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_loop() with end index smaller than the start index does nothing...");
+    logln("Verifying that submit_loop() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.submit_loop(indices.second, indices.first,
                 [&count](const std::int64_t)
                 {
@@ -1386,12 +1726,12 @@ void check_loop()
             .wait();
         check(count == 0);
     }
-    sync_out.println("Trying detach_loop() with a number of tasks larger than the number of indices:");
+    logln("Trying detach_loop() with a number of tasks larger than the number of indices:");
     {
         const std::int64_t start = random(-range, range);
         check(check_loop_no_return(pool, start, start + random<std::int64_t>(0, static_cast<std::int64_t>(pool.get_thread_count() * 2)), random<std::size_t>(pool.get_thread_count() * 2, pool.get_thread_count() * 4), "detach_loop()"));
     }
-    sync_out.println("Trying submit_loop() with a number of tasks larger than the number of indices:");
+    logln("Trying submit_loop() with a number of tasks larger than the number of indices:");
     {
         const std::int64_t start = random(-range, range);
         check(check_loop_no_return(pool, start, start + random<std::int64_t>(0, static_cast<std::int64_t>(pool.get_thread_count() * 2)), random<std::size_t>(pool.get_thread_count() * 2, pool.get_thread_count() * 4), "submit_loop()"));
@@ -1410,7 +1750,7 @@ void check_loop()
  */
 bool check_blocks_no_return(BS::thread_pool<>& pool, const std::int64_t random_start, const std::int64_t random_end, const std::size_t num_tasks, const std::string_view which_func)
 {
-    sync_out.println("Verifying that ", which_func, " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices exactly once...");
+    logln("Verifying that ", which_func, " from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " modifies all indices exactly once...");
     const std::size_t num_indices = static_cast<std::size_t>(random_end - random_start);
     std::vector<std::atomic<std::int64_t>> flags(num_indices);
     std::atomic<bool> indices_out_of_range = false;
@@ -1437,7 +1777,7 @@ bool check_blocks_no_return(BS::thread_pool<>& pool, const std::int64_t random_s
     }
     if (indices_out_of_range)
     {
-        sync_out.println("Error: Block indices out of range!");
+        logln_ansi(ansi_error, "Error: Block indices out of range!");
         return false;
     }
     return all_flags_equal(flags, 1);
@@ -1453,7 +1793,7 @@ bool check_blocks_no_return(BS::thread_pool<>& pool, const std::int64_t random_s
  */
 void check_blocks_return(BS::thread_pool<>& pool, const std::int64_t random_start, const std::int64_t random_end, const std::size_t num_tasks)
 {
-    sync_out.println("Verifying that submit_blocks() from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " correctly sums all indices...");
+    logln("Verifying that submit_blocks() from ", random_start, " to ", random_end, " with ", num_tasks, num_tasks == 1 ? " task" : " tasks", " correctly sums all indices...");
     const auto loop = [](const std::int64_t start, const std::int64_t end)
     {
         std::int64_t total = 0;
@@ -1491,11 +1831,11 @@ void check_blocks()
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
         check_blocks_return(pool, indices.first, indices.second, random<std::size_t>(1, pool.get_thread_count()));
     }
-    sync_out.println("Verifying that detach_blocks() with identical start and end indices does nothing...");
+    logln("Verifying that detach_blocks() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.detach_blocks(index, index,
             [&count](const std::int64_t, const std::int64_t)
             {
@@ -1504,11 +1844,11 @@ void check_blocks()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_blocks() with identical start and end indices does nothing...");
+    logln("Verifying that submit_blocks() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.submit_blocks(index, index,
                 [&count](const std::int64_t, const std::int64_t)
                 {
@@ -1517,11 +1857,11 @@ void check_blocks()
             .wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that detach_blocks() with end index smaller than the start index does nothing...");
+    logln("Verifying that detach_blocks() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.detach_blocks(indices.second, indices.first,
             [&count](const std::int64_t, const std::int64_t)
             {
@@ -1530,11 +1870,11 @@ void check_blocks()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_blocks() with end index smaller than the start index does nothing...");
+    logln("Verifying that submit_blocks() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.submit_blocks(indices.second, indices.first,
                 [&count](const std::int64_t, const std::int64_t)
                 {
@@ -1543,12 +1883,12 @@ void check_blocks()
             .wait();
         check(count == 0);
     }
-    sync_out.println("Trying detach_blocks() with a number of tasks larger than the number of indices:");
+    logln("Trying detach_blocks() with a number of tasks larger than the number of indices:");
     {
         const std::int64_t start = random(-range, range);
         check(check_blocks_no_return(pool, start, start + random<std::int64_t>(0, static_cast<std::int64_t>(pool.get_thread_count() * 2)), random<std::size_t>(pool.get_thread_count() * 2, pool.get_thread_count() * 4), "detach_blocks()"));
     }
-    sync_out.println("Trying submit_blocks() with a number of tasks larger than the number of indices:");
+    logln("Trying submit_blocks() with a number of tasks larger than the number of indices:");
     {
         const std::int64_t start = random(-range, range);
         check(check_blocks_no_return(pool, start, start + random<std::int64_t>(0, static_cast<std::int64_t>(pool.get_thread_count() * 2)), random<std::size_t>(pool.get_thread_count() * 2, pool.get_thread_count() * 4), "submit_blocks()"));
@@ -1570,13 +1910,13 @@ void check_blocks()
  */
 bool check_sequence_no_return(BS::thread_pool<>& pool, const std::int64_t random_start, const std::int64_t random_end, const std::string_view which_func)
 {
-    sync_out.println("Verifying that ", which_func, " from ", random_start, " to ", random_end, " modifies all indices exactly once...");
+    logln("Verifying that ", which_func, " from ", random_start, " to ", random_end, " modifies all indices exactly once...");
     const std::size_t num_indices = static_cast<std::size_t>(random_end - random_start);
     std::vector<std::atomic<std::int64_t>> flags(num_indices);
     std::atomic<bool> indices_out_of_range = false;
     const auto sequence = [&flags, random_start, random_end, &indices_out_of_range](const std::int64_t index)
     {
-        if (index < random_start || index > random_end)
+        if (index < random_start || index >= random_end)
             indices_out_of_range = true;
         else
             ++flags[static_cast<std::size_t>(index - random_start)];
@@ -1592,7 +1932,7 @@ bool check_sequence_no_return(BS::thread_pool<>& pool, const std::int64_t random
     }
     if (indices_out_of_range)
     {
-        sync_out.println("Error: Sequence indices out of range!");
+        logln_ansi(ansi_error, "Error: Sequence indices out of range!");
         return false;
     }
     return all_flags_equal(flags, 1);
@@ -1607,7 +1947,7 @@ bool check_sequence_no_return(BS::thread_pool<>& pool, const std::int64_t random
  */
 void check_sequence_return(BS::thread_pool<>& pool, const std::int64_t random_start, const std::int64_t random_end)
 {
-    sync_out.println("Verifying that submit_sequence() from ", random_start, " to ", random_end, " correctly sums all squares of indices...");
+    logln("Verifying that submit_sequence() from ", random_start, " to ", random_end, " correctly sums all squares of indices...");
     const auto sequence = [](const std::int64_t index)
     {
         return index * index;
@@ -1645,11 +1985,11 @@ void check_sequence()
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
         check_sequence_return(pool, indices.first, indices.second);
     }
-    sync_out.println("Verifying that detach_sequence() with identical start and end indices does nothing...");
+    logln("Verifying that detach_sequence() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.detach_sequence(index, index,
             [&count](const std::int64_t)
             {
@@ -1658,11 +1998,11 @@ void check_sequence()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_sequence() with identical start and end indices does nothing...");
+    logln("Verifying that submit_sequence() with identical start and end indices does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::int64_t index = random(-range, range);
-        sync_out.println("Range: ", index, " to ", index);
+        logln("Range: ", index, " to ", index);
         pool.submit_sequence(index, index,
                 [&count](const std::int64_t)
                 {
@@ -1671,11 +2011,11 @@ void check_sequence()
             .wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that detach_sequence() with end index smaller than the start index does nothing...");
+    logln("Verifying that detach_sequence() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.detach_sequence(indices.second, indices.first,
             [&count](const std::int64_t)
             {
@@ -1684,11 +2024,11 @@ void check_sequence()
         pool.wait();
         check(count == 0);
     }
-    sync_out.println("Verifying that submit_sequence() with end index smaller than the start index does nothing...");
+    logln("Verifying that submit_sequence() with end index smaller than the start index does nothing...");
     {
         std::atomic<std::size_t> count = 0;
         const std::pair<std::int64_t, std::int64_t> indices = random_pair(-range, range);
-        sync_out.println("Range: ", indices.second, " to ", indices.first);
+        logln("Range: ", indices.second, " to ", indices.first);
         pool.submit_sequence(indices.second, indices.first,
                 [&count](const std::int64_t)
                 {
@@ -1710,37 +2050,37 @@ void check_task_monitoring()
 {
     constexpr std::chrono::milliseconds sleep_time(300);
     const std::size_t num_threads = std::min<std::size_t>(std::thread::hardware_concurrency(), 4);
-    sync_out.println("Creating pool with ", num_threads, " threads.");
+    logln("Creating pool with ", num_threads, " threads.");
     BS::thread_pool pool(num_threads);
-    sync_out.println("Submitting ", num_threads * 3, " tasks.");
-    BS::counting_semaphore sem(0);
+    logln("Submitting ", num_threads * 3, " tasks.");
+    counting_semaphore sem(0);
     for (std::size_t i = 0; i < num_threads * 3; ++i)
     {
         pool.detach_task(
             [i, &sem]
             {
                 sem.acquire();
-                sync_out.println("Task ", i, " released.");
+                logln("Task ", i, " released.");
             });
     }
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("After submission, should have: ", num_threads * 3, " tasks total, ", num_threads, " tasks running, ", num_threads * 2, " tasks queued...");
-    sync_out.print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    logln("After submission, should have: ", num_threads * 3, " tasks total, ", num_threads, " tasks running, ", num_threads * 2, " tasks queued...");
+    log("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == num_threads * 3 && pool.get_tasks_running() == num_threads && pool.get_tasks_queued() == num_threads * 2);
     sem.release(static_cast<std::ptrdiff_t>(num_threads));
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("After releasing ", num_threads, " tasks, should have: ", num_threads * 2, " tasks total, ", num_threads, " tasks running, ", num_threads, " tasks queued...");
-    sync_out.print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    logln("After releasing ", num_threads, " tasks, should have: ", num_threads * 2, " tasks total, ", num_threads, " tasks running, ", num_threads, " tasks queued...");
+    log("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == num_threads * 2 && pool.get_tasks_running() == num_threads && pool.get_tasks_queued() == num_threads);
     sem.release(static_cast<std::ptrdiff_t>(num_threads));
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("After releasing ", num_threads, " more tasks, should have: ", num_threads, " tasks total, ", num_threads, " tasks running, ", 0, " tasks queued...");
-    sync_out.print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    logln("After releasing ", num_threads, " more tasks, should have: ", num_threads, " tasks total, ", num_threads, " tasks running, ", 0, " tasks queued...");
+    log("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == num_threads && pool.get_tasks_running() == num_threads && pool.get_tasks_queued() == 0);
     sem.release(static_cast<std::ptrdiff_t>(num_threads));
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("After releasing the final ", num_threads, " tasks, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
-    sync_out.print("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
+    logln("After releasing the final ", num_threads, " tasks, should have: ", 0, " tasks total, ", 0, " tasks running, ", 0, " tasks queued...");
+    log("Result: ", pool.get_tasks_total(), " tasks total, ", pool.get_tasks_running(), " tasks running, ", pool.get_tasks_queued(), " tasks queued ");
     check(pool.get_tasks_total() == 0 && pool.get_tasks_running() == 0 && pool.get_tasks_queued() == 0);
 }
 
@@ -1751,29 +2091,29 @@ void check_pausing()
 {
     constexpr std::chrono::milliseconds sleep_time(200);
     BS::pause_thread_pool pool;
-    sync_out.println("Checking that the pool correctly reports that it is not paused after construction...");
+    logln("Checking that the pool correctly reports that it is not paused after construction...");
     check(!pool.is_paused());
-    sync_out.println("Pausing pool.");
+    logln("Pausing pool.");
     pool.pause();
-    sync_out.println("Checking that the pool correctly reports that it is paused...");
+    logln("Checking that the pool correctly reports that it is paused...");
     check(pool.is_paused());
-    sync_out.println("Submitting task and waiting.");
+    logln("Submitting task and waiting.");
     std::atomic<bool> flag = false;
     pool.detach_task(
         [&flag]
         {
             flag = true;
-            sync_out.println("Task executed.");
+            logln("Task executed.");
         });
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("Verifying that the task has not been executed...");
+    logln("Verifying that the task has not been executed...");
     check(!flag);
-    sync_out.println("Unpausing pool and waiting.");
+    logln("Unpausing pool and waiting.");
     pool.unpause();
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("Verifying that the task has been executed...");
+    logln("Verifying that the task has been executed...");
     check(flag);
-    sync_out.println("Checking that the pool correctly reports that it is not paused...");
+    logln("Checking that the pool correctly reports that it is not paused...");
     check(!pool.is_paused());
 }
 
@@ -1786,7 +2126,7 @@ void check_purge()
     constexpr std::chrono::milliseconds short_sleep_time(100);
     constexpr std::size_t num_tasks = 10;
     BS::thread_pool pool(1);
-    sync_out.println("Submitting ", num_tasks, " tasks to the pool.");
+    logln("Submitting ", num_tasks, " tasks to the pool.");
     std::vector<std::atomic<bool>> flags(num_tasks);
     for (std::size_t i = 0; i < num_tasks; ++i)
     {
@@ -1794,15 +2134,15 @@ void check_purge()
             [&flags, i, long_sleep_time]
             {
                 std::this_thread::sleep_for(long_sleep_time);
-                sync_out.println("Task ", i, " done.");
+                logln("Task ", i, " done.");
                 flags[i] = true;
             });
     }
     std::this_thread::sleep_for(short_sleep_time);
-    sync_out.println("Purging the pool and waiting for tasks...");
+    logln("Purging the pool and waiting for tasks...");
     pool.purge();
     pool.wait();
-    sync_out.println("Checking that only the first task was executed...");
+    logln("Checking that only the first task was executed...");
     flags[0] = !flags[0];
     check(no_flags_set(flags));
 }
@@ -1825,7 +2165,7 @@ struct test_exception : public std::runtime_error
  */
 void throws()
 {
-    sync_out.println("Throwing exception...");
+    logln("Throwing exception...");
     throw test_exception();
 };
 
@@ -1835,7 +2175,7 @@ void throws()
 void check_exceptions_submit()
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that exceptions are forwarded correctly by submit_task()...");
+    logln("Checking that exceptions are forwarded correctly by submit_task()...");
     bool caught = false;
     std::future<void> future = pool.submit_task(throws);
     try
@@ -1855,7 +2195,7 @@ void check_exceptions_submit()
 void check_exceptions_multi_future()
 {
     BS::thread_pool pool;
-    sync_out.println("Checking that exceptions are forwarded correctly by BS::multi_future...");
+    logln("Checking that exceptions are forwarded correctly by BS::multi_future...");
     bool caught = false;
     BS::multi_future<void> future;
     future.push_back(pool.submit_task(throws));
@@ -1894,7 +2234,7 @@ bool check_vector_of_size(BS::thread_pool<>& pool, const std::size_t vector_size
         vector_1[i] = random(-value_range, value_range);
         vector_2[i] = random(-value_range, value_range);
     }
-    sync_out.println("Adding two vectors with ", vector_size, " elements using ", num_tasks, " tasks...");
+    logln("Adding two vectors with ", vector_size, " elements using ", num_tasks, " tasks...");
     std::vector<std::int64_t> sum_single(vector_size);
     for (std::size_t i = 0; i < vector_size; ++i)
         sum_single[i] = vector_1[i] + vector_2[i];
@@ -1946,7 +2286,7 @@ void check_priority()
     BS::thread_pool<BS::tp::priority | BS::tp::pause> pool(1);
     pool.pause();
 
-    // Create a shuffled lists of priorities.
+    // Create a shuffled list of priorities.
     std::vector<BS::priority_t> priorities;
     priorities.reserve(num_tasks - 1);
     for (std::size_t i = 0; i < num_tasks - 1; ++i)
@@ -1962,14 +2302,14 @@ void check_priority()
     const auto execute_task_priority = [&execution_order, &exec_mutex](const BS::priority_t priority)
     {
         const std::scoped_lock lock(exec_mutex);
-        sync_out.println("Task with priority ", static_cast<rand_priority_t>(priority), " executed.");
+        logln("Task with priority ", static_cast<rand_priority_t>(priority), " executed.");
         execution_order.push_back(priority);
     };
     const std::vector<std::string_view> functions = {"detach_task", "submit_task", "detach_sequence", "submit_sequence", "detach_loop", "submit_loop", "detach_blocks", "submit_blocks"};
     for (const BS::priority_t priority : priorities)
     {
         const std::string_view func = functions[random<std::size_t>(0, functions.size() - 1)];
-        sync_out.println("Launching ", func, "() with priority ", static_cast<rand_priority_t>(priority), "...");
+        logln("Launching ", func, "() with priority ", static_cast<rand_priority_t>(priority), "...");
         if (func == "detach_task")
         {
             pool.detach_task(
@@ -2051,7 +2391,7 @@ void check_priority()
     }
 
     // Unpause the pool so the tasks can be executed, then check that they were executed in the correct order.
-    sync_out.println("Checking execution order...");
+    logln("Checking execution order...");
     std::this_thread::sleep_for(sleep_time);
     pool.unpause();
     pool.wait();
@@ -2068,7 +2408,7 @@ void check_priority()
  */
 void check_init()
 {
-    sync_out.println("Comparing thread indices reported by get_index() using an initialization function passed to reset():");
+    logln("Comparing thread indices reported by get_index() using an initialization function passed to reset():");
     std::vector<std::atomic<std::size_t>> thread_indices(std::thread::hardware_concurrency());
     std::atomic<bool> correct = true;
     BS::thread_pool pool;
@@ -2082,7 +2422,7 @@ void check_init()
                 correct = false;
         });
     pool.wait();
-    sync_out.println("Checking that all reported indices have values...");
+    logln("Checking that all reported indices have values...");
     check(correct);
     correct = true;
     for (std::size_t i = 0; i < thread_indices.size(); ++i)
@@ -2093,14 +2433,14 @@ void check_init()
             break;
         }
     }
-    sync_out.println("Checking that all reported indices are correct...");
+    logln("Checking that all reported indices are correct...");
     check(correct);
 
-    sync_out.println("Verifying that the index of the main thread has no value...");
+    logln("Verifying that the index of the main thread has no value...");
     const std::optional<std::size_t> main_idx = BS::this_thread::get_index();
     check(!main_idx.has_value());
 
-    sync_out.println("Verifying that the index of an independent thread has no value...");
+    logln("Verifying that the index of an independent thread has no value...");
     std::thread test_thread(
         []
         {
@@ -2115,7 +2455,7 @@ void check_init()
  */
 void check_cleanup()
 {
-    sync_out.println("Comparing thread indices reported by get_index() using a cleanup function passed to set_cleanup_func():");
+    logln("Comparing thread indices reported by get_index() using a cleanup function passed to set_cleanup_func():");
     std::vector<std::atomic<std::size_t>> thread_indices(std::thread::hardware_concurrency());
     std::atomic<bool> correct = true;
     {
@@ -2130,7 +2470,7 @@ void check_cleanup()
                     correct = false;
             });
     }
-    sync_out.println("Checking that all reported indices have values...");
+    logln("Checking that all reported indices have values...");
     check(correct);
     correct = true;
     for (std::size_t i = 0; i < thread_indices.size(); ++i)
@@ -2141,7 +2481,7 @@ void check_cleanup()
             break;
         }
     }
-    sync_out.println("Checking that all reported indices are correct...");
+    logln("Checking that all reported indices are correct...");
     check(correct);
 }
 
@@ -2150,7 +2490,7 @@ void check_cleanup()
  */
 void check_get_pool()
 {
-    sync_out.println("Checking that all threads report the correct pool...");
+    logln("Checking that all threads report the correct pool...");
     std::vector<std::atomic<void*>> thread_pool_ptrs1(std::thread::hardware_concurrency());
     std::vector<std::atomic<void*>> thread_pool_ptrs2(std::thread::hardware_concurrency());
     const auto store_pointers = [](std::vector<std::atomic<void*>>& ptrs)
@@ -2180,12 +2520,12 @@ void check_get_pool()
     check_pointers(thread_pool_ptrs1, pool1);
     check_pointers(thread_pool_ptrs2, pool2);
     {
-        sync_out.println("Verifying that the pool pointer of the main thread has no value...");
+        logln("Verifying that the pool pointer of the main thread has no value...");
         const auto ptr = BS::this_thread::get_pool();
         check(!ptr.has_value());
     }
     {
-        sync_out.println("Verifying that the pool pointer of an independent thread has no value...");
+        logln("Verifying that the pool pointer of an independent thread has no value...");
         std::thread test_thread(
             []
             {
@@ -2236,7 +2576,7 @@ void check_copy(const std::string_view which_func)
 {
     BS::thread_pool pool;
     const std::size_t num_tasks = pool.get_thread_count() * 10;
-    sync_out.println("Checking ", which_func, "...");
+    logln("Checking ", which_func, "...");
     std::atomic<std::size_t> copied = 0;
     std::atomic<std::size_t> moved = 0;
     auto task = [detect = count_copy_move(&copied, &moved)](auto&&...) {};
@@ -2253,7 +2593,7 @@ void check_copy(const std::string_view which_func)
     else if (which_func == "submit_sequence()")
         std::ignore = pool.submit_sequence(0, num_tasks, std::move(task));
     pool.wait();
-    sync_out.println("Copy count: ");
+    logln("Copy count: ");
     check(0, copied.load()); // Note: Move count will be unpredictable if priority is on, so we don't check it.
 }
 
@@ -2308,7 +2648,7 @@ void check_shared_ptr(const std::string_view which_func)
     std::atomic<bool> object_exists = false;
     std::atomic<std::size_t> uses_before_destruct = 0;
     std::atomic<std::size_t> uses_after_destruct = 0;
-    sync_out.println("Checking ", which_func, "...");
+    logln("Checking ", which_func, "...");
     {
         std::shared_ptr<detect_destruct> ptr = std::make_shared<detect_destruct>(&object_exists);
         auto task = [ptr, &object_exists, &uses_before_destruct, &uses_after_destruct, &sleep_time](auto&&...)
@@ -2335,9 +2675,9 @@ void check_shared_ptr(const std::string_view which_func)
     }
     pool.wait();
     std::this_thread::sleep_for(sleep_time);
-    sync_out.println("Uses before destruct:");
+    logln("Uses before destruct:");
     check(num_tasks, uses_before_destruct.load());
-    sync_out.println("Uses after destruct:");
+    logln("Uses after destruct:");
     check(0, uses_after_destruct.load());
 }
 
@@ -2376,21 +2716,21 @@ void check_task_destruct()
 void check_common_index_type()
 {
     // NOLINTBEGIN(misc-redundant-expression)
-    sync_out.println("Checking std::int8_t...");
+    logln("Checking std::int8_t...");
     check(std::is_same_v<BS::common_index_type_t<std::int8_t, std::int8_t>, std::int8_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::int16_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::int32_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::uint8_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::uint16_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::uint32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int8_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::int16_t...");
+    logln("Checking std::int16_t...");
     check(std::is_same_v<BS::common_index_type_t<std::int16_t, std::int8_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::int16_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::int32_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::uint8_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::uint16_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::uint32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int16_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::int32_t...");
+    logln("Checking std::int32_t...");
     check(std::is_same_v<BS::common_index_type_t<std::int32_t, std::int8_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::int16_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::int32_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::uint8_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::uint16_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::uint32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int32_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::int64_t...");
+    logln("Checking std::int64_t...");
     check(std::is_same_v<BS::common_index_type_t<std::int64_t, std::int8_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::int16_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::int32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::uint8_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::uint16_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::uint32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::int64_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::uint8_t...");
+    logln("Checking std::uint8_t...");
     check(std::is_same_v<BS::common_index_type_t<std::uint8_t, std::int8_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::int16_t>, std::int16_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::int32_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::uint8_t>, std::uint8_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::uint16_t>, std::uint16_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::uint32_t>, std::uint32_t> && std::is_same_v<BS::common_index_type_t<std::uint8_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::uint16_t...");
+    logln("Checking std::uint16_t...");
     check(std::is_same_v<BS::common_index_type_t<std::uint16_t, std::int8_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::int16_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::int32_t>, std::int32_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::uint8_t>, std::uint16_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::uint16_t>, std::uint16_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::uint32_t>, std::uint32_t> && std::is_same_v<BS::common_index_type_t<std::uint16_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::uint32_t...");
+    logln("Checking std::uint32_t...");
     check(std::is_same_v<BS::common_index_type_t<std::uint32_t, std::int8_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::int16_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::int32_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::int64_t>, std::int64_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::uint8_t>, std::uint32_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::uint16_t>, std::uint32_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::uint32_t>, std::uint32_t> && std::is_same_v<BS::common_index_type_t<std::uint32_t, std::uint64_t>, std::uint64_t>);
-    sync_out.println("Checking std::uint64_t...");
+    logln("Checking std::uint64_t...");
     check(std::is_same_v<BS::common_index_type_t<std::uint64_t, std::int8_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::int16_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::int32_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::int64_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::uint8_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::uint16_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::uint32_t>, std::uint64_t> && std::is_same_v<BS::common_index_type_t<std::uint64_t, std::uint64_t>, std::uint64_t>);
     // NOLINTEND(misc-redundant-expression)
 }
@@ -2428,17 +2768,17 @@ void check_deadlock(const F&& task)
         check_deadlock_pool.wait_for(sleep_time);
         if (try_n == tries)
         {
-            sync_out.println("Successfully finished all tries!");
+            logln_ansi(ansi_success, "Successfully finished all tries!");
             passed = true;
             break;
         }
         if (try_n == old_try_n)
         {
-            sync_out.println("Error: deadlock detected!");
+            logln_ansi(ansi_error, "Error: deadlock detected!");
             passed = false;
             break;
         }
-        sync_out.println("Finished ", try_n, " tries out of ", tries, "...");
+        logln("Finished ", try_n, " tries out of ", tries, "...");
     }
     check(passed);
 }
@@ -2499,24 +2839,25 @@ void check_root(const bool condition)
 {
     if (condition)
     {
-        sync_out.println("-> passed.");
+        logln("-> passed.");
         ++test_results::tests_succeeded;
     }
     else
     {
-        sync_out.println("-> failed, most likely due to insufficient permissions; ignoring.");
+        logln("-> failed, most likely due to insufficient permissions; ignoring.");
     }
 }
 
 /**
  * @brief Check if the expected result has been obtained, report the result, but do not keep count of the total number of successes and failures, because failure is expected if the test is not run as root.
  *
- * @param condition The condition to check.
+ * @param expected The expected result.
+ * @param obtained The obtained result.
  */
 template <typename T1, typename T2>
 void check_root(const T1& expected, const T2& obtained)
 {
-    sync_out.print("- Expected: ", expected, ", obtained: ", obtained, ' ');
+    log("- Expected: ", expected, ", obtained: ", obtained, ' ');
     check_root(expected == static_cast<T1>(obtained));
 }
 
@@ -2525,13 +2866,13 @@ void check_root(const T1& expected, const T2& obtained)
  */
 void check_os_process_priorities()
 {
-    sync_out.println("Checking OS process priorities...");
-    sync_out.println("NOTE: This test must be run as admin/root, otherwise it will fail!");
+    logln("Checking OS process priorities...");
+    logln_ansi(ansi_info, "NOTE: This test must be run as admin/root, otherwise it will fail!");
     // We go over the priorities in reverse order because on Linux, a non-root user can only decrease the priority, so if we start from the lowest priority, all tests will fail except the first one.
     const std::vector<BS::os_process_priority> priorities = {BS::os_process_priority::realtime, BS::os_process_priority::high, BS::os_process_priority::above_normal, BS::os_process_priority::normal, BS::os_process_priority::below_normal, BS::os_process_priority::idle};
     for (BS::os_process_priority priority : priorities)
     {
-        sync_out.print("Setting OS process priority to ", os_process_priority_name(priority), ' ');
+        log("Setting OS process priority to ", os_process_priority_name(priority), ' ');
         // On Windows we should be able to set all the priorities even as non-admin; realtime will "succeed" but actually set the priority to high. On Linux, only root can increase the priority beyond normal.
     #ifdef _WIN32
         check(BS::set_os_process_priority(priority));
@@ -2542,7 +2883,7 @@ void check_os_process_priorities()
             check_root(BS::set_os_process_priority(priority));
     #endif
         const std::optional<BS::os_process_priority> new_priority = BS::get_os_process_priority();
-        sync_out.print("Obtaining new OS process priority ");
+        log("Obtaining new OS process priority ");
         check(new_priority.has_value());
     #ifdef _WIN32
         if (priority != BS::os_process_priority::realtime)
@@ -2557,7 +2898,7 @@ void check_os_process_priorities()
     #endif
     }
     // Set the priority back to normal after the test ends. This will fail on Linux if not root.
-    sync_out.println("Setting priority back to normal...");
+    logln("Setting priority back to normal...");
     #ifdef _WIN32
     check(BS::set_os_process_priority(BS::os_process_priority::normal));
     #else
@@ -2574,14 +2915,14 @@ void check_os_thread_priorities()
     pool.detach_task(
         []
         {
-            sync_out.println("Checking OS thread priorities for pool threads...");
+            logln("Checking OS thread priorities for pool threads...");
     #ifdef __linux__
-            sync_out.println("NOTE: On Linux, this test must be run as root, otherwise it will fail!");
+            logln_ansi(ansi_info, "NOTE: On Linux, this test must be run as root, otherwise it will fail!");
     #endif
             const std::vector<BS::os_thread_priority> priorities = {BS::os_thread_priority::realtime, BS::os_thread_priority::highest, BS::os_thread_priority::above_normal, BS::os_thread_priority::normal, BS::os_thread_priority::below_normal, BS::os_thread_priority::lowest, BS::os_thread_priority::idle};
             for (BS::os_thread_priority priority : priorities)
             {
-                sync_out.print("Setting OS thread priority to ", os_thread_priority_name(priority), ' ');
+                log("Setting OS thread priority to ", os_thread_priority_name(priority), ' ');
             // On Windows we should be able to set all the priorities even as non-admin, including realtime. On Linux, only root can increase the priority beyond normal. (Also, note that on WSL, even root cannot set the priority to highest or above.)
     #ifdef _WIN32
                 check(BS::this_thread::set_os_thread_priority(priority));
@@ -2592,7 +2933,7 @@ void check_os_thread_priorities()
                     check_root(BS::this_thread::set_os_thread_priority(priority));
     #endif
                 const std::optional<BS::os_thread_priority> new_priority = BS::this_thread::get_os_thread_priority();
-                sync_out.print("Obtaining new OS thread priority ");
+                log("Obtaining new OS thread priority ");
                 check(new_priority.has_value());
     #ifdef _WIN32
                 check(os_thread_priority_name(priority), os_thread_priority_name(new_priority));
@@ -2601,7 +2942,7 @@ void check_os_thread_priorities()
     #endif
             }
             // Set the priority back to normal after the test ends. This will fail on Linux/macOS if not running as root.
-            sync_out.println("Setting priority back to normal...");
+            logln("Setting priority back to normal...");
     #ifdef _WIN32
             check(BS::this_thread::set_os_thread_priority(BS::os_thread_priority::normal));
     #else
@@ -2615,11 +2956,11 @@ void check_os_thread_priorities()
  */
 void check_os_thread_names()
 {
-    sync_out.println("Checking OS thread names...");
+    logln("Checking OS thread names...");
     const std::string name = "BS_thread_pool";
-    sync_out.println("Setting main thread name to \"", name, "\"...");
+    logln("Setting main thread name to \"", name, "\"...");
     check(BS::this_thread::set_os_thread_name(name));
-    sync_out.println("Obtaining new OS thread name...");
+    logln("Obtaining new OS thread name...");
     std::optional<std::string> new_name = BS::this_thread::get_os_thread_name();
     if (new_name.has_value())
     {
@@ -2632,6 +2973,7 @@ void check_os_thread_names()
     }
 }
 
+    #if defined(_WIN32) || defined(__linux__)
 /**
  * @brief Convert a `std::vector<bool>` representing CPU affinity to a string of 0s and 1s.
  *
@@ -2656,38 +2998,38 @@ std::string affinity_to_string(const std::optional<std::vector<bool>>& affinity)
  */
 void check_os_process_affinity()
 {
-    sync_out.println("Checking OS process affinity...");
+    logln("Checking OS process affinity...");
 
-    sync_out.print("Obtaining initial process affinity ");
+    log("Obtaining initial process affinity ");
     const std::optional<std::vector<bool>> initial_affinity = BS::get_os_process_affinity();
     check(initial_affinity.has_value());
-    sync_out.println("Initial affinity is: ", affinity_to_string(initial_affinity));
+    logln("Initial affinity is: ", affinity_to_string(initial_affinity));
     const std::size_t num_bits = initial_affinity.has_value() ? initial_affinity->size() : std::thread::hardware_concurrency();
 
-    sync_out.print("Setting affinity to CPU 1 only ");
+    log("Setting affinity to CPU 1 only ");
     std::vector<bool> cpu_1_in(num_bits, false);
     cpu_1_in[0] = true;
     check(BS::set_os_process_affinity(cpu_1_in));
-    sync_out.print("Obtaining new affinity ");
+    log("Obtaining new affinity ");
     const std::optional<std::vector<bool>> cpu_1_out = BS::get_os_process_affinity();
     check(cpu_1_out.has_value());
     check(affinity_to_string(cpu_1_in), affinity_to_string(cpu_1_out));
 
-    sync_out.print("Setting affinity to alternating CPUs ");
+    log("Setting affinity to alternating CPUs ");
     std::vector<bool> alternating_in(num_bits, false);
     for (std::size_t i = 0; i < num_bits; ++i)
         alternating_in[i] = (i % 2 == 1);
     check(BS::set_os_process_affinity(alternating_in));
-    sync_out.print("Obtaining new affinity ");
+    log("Obtaining new affinity ");
     const std::optional<std::vector<bool>> alternating_out = BS::get_os_process_affinity();
     check(alternating_out.has_value());
     check(affinity_to_string(alternating_in), affinity_to_string(alternating_out));
 
     if (initial_affinity.has_value())
     {
-        sync_out.print("Setting affinity back to initial value ");
+        log("Setting affinity back to initial value ");
         check(BS::set_os_process_affinity(*initial_affinity));
-        sync_out.print("Obtaining new affinity ");
+        log("Obtaining new affinity ");
         const std::optional<std::vector<bool>> initial_out = BS::get_os_process_affinity();
         check(initial_out.has_value());
         check(affinity_to_string(initial_affinity), affinity_to_string(initial_out));
@@ -2709,38 +3051,38 @@ void check_os_thread_affinity()
             const std::vector<bool> all_enabled(num_process_bits, true);
             BS::set_os_process_affinity(all_enabled);
 
-            sync_out.println("Checking OS thread affinity for pool threads...");
+            logln("Checking OS thread affinity for pool threads...");
 
-            sync_out.print("Obtaining initial thread affinity ");
+            log("Obtaining initial thread affinity ");
             const std::optional<std::vector<bool>> initial_affinity = BS::this_thread::get_os_thread_affinity();
             check(initial_affinity.has_value());
-            sync_out.println("Initial affinity is: ", affinity_to_string(initial_affinity));
+            logln("Initial affinity is: ", affinity_to_string(initial_affinity));
             const std::size_t num_bits = initial_affinity.has_value() ? initial_affinity->size() : std::thread::hardware_concurrency();
 
-            sync_out.print("Setting affinity to CPU 1 only ");
+            log("Setting affinity to CPU 1 only ");
             std::vector<bool> cpu_1_in(num_bits, false);
             cpu_1_in[0] = true;
             check(BS::this_thread::set_os_thread_affinity(cpu_1_in));
-            sync_out.print("Obtaining new affinity ");
+            log("Obtaining new affinity ");
             const std::optional<std::vector<bool>> cpu_1_out = BS::this_thread::get_os_thread_affinity();
             check(cpu_1_out.has_value());
             check(affinity_to_string(cpu_1_in), affinity_to_string(cpu_1_out));
 
-            sync_out.print("Setting affinity to alternating CPUs ");
+            log("Setting affinity to alternating CPUs ");
             std::vector<bool> alternating_in(num_bits, false);
             for (std::size_t i = 0; i < num_bits; ++i)
                 alternating_in[i] = (i % 2 == 1);
             check(BS::this_thread::set_os_thread_affinity(alternating_in));
-            sync_out.print("Obtaining new affinity ");
+            log("Obtaining new affinity ");
             const std::optional<std::vector<bool>> alternating_out = BS::this_thread::get_os_thread_affinity();
             check(alternating_out.has_value());
             check(affinity_to_string(alternating_in), affinity_to_string(alternating_out));
 
             if (initial_affinity.has_value())
             {
-                sync_out.print("Setting affinity back to initial value ");
+                log("Setting affinity back to initial value ");
                 check(BS::this_thread::set_os_thread_affinity(*initial_affinity));
-                sync_out.print("Obtaining new affinity ");
+                log("Obtaining new affinity ");
                 const std::optional<std::vector<bool>> initial_out = BS::this_thread::get_os_thread_affinity();
                 check(initial_out.has_value());
                 check(affinity_to_string(initial_affinity), affinity_to_string(initial_out));
@@ -2750,6 +3092,7 @@ void check_os_thread_affinity()
                 BS::set_os_process_affinity(*initial_process_affinity);
         });
 }
+    #endif
 
 /**
  * @brief Try to set the OS priority of this thread to the highest possible value. Also set the name of the thread for debugging purposes.
@@ -2793,7 +3136,7 @@ void print_timing(const mean_sd& stats, const double pixels_per_ms)
     constexpr int width_mean = 6;
     constexpr int width_sd = 4;
     constexpr int width_pms = 7;
-    sync_out.println("-> Mean: ", std::setw(width_mean), stats.mean, " ms, standard deviation: ", std::setw(width_sd), stats.sd, " ms, speed: ", std::setw(width_pms), pixels_per_ms, " pixels/ms.");
+    logln("-> Mean: ", std::setw(width_mean), stats.mean, " ms, standard deviation: ", std::setw(width_sd), stats.sd, " ms, speed: ", std::setw(width_pms), pixels_per_ms, " pixels/ms.");
 }
 
 /**
@@ -2813,13 +3156,14 @@ std::size_t min_element_index(const std::vector<T>& vec)
  * @brief Calculate and print the speedup obtained by multithreading.
  *
  * @param timings A vector of the timings corresponding to different numbers of tasks.
+ * @param try_tasks A vector containing the numbers of tasks tried.
  */
 void print_speedup(const std::vector<double>& timings, const std::vector<std::size_t>& try_tasks)
 {
     const std::size_t min_el = min_element_index(timings);
     const double max_speedup = std::round((timings[0] / timings[min_el]) * 10) / 10;
     const std::size_t num_tasks = try_tasks[min_el];
-    sync_out.println("Maximum speedup obtained by multithreading vs. single-threading: ", max_speedup, "x, using ", num_tasks, " tasks.");
+    logln("Maximum speedup obtained by multithreading vs. single-threading: ", max_speedup, "x, using ", num_tasks, " tasks.");
 }
 
 /**
@@ -2830,13 +3174,18 @@ void print_speedup(const std::vector<double>& timings, const std::vector<std::si
  */
 mean_sd analyze(const std::vector<std::chrono::milliseconds::rep>& timings)
 {
+    // First, calculate the mean <X> and the mean of the square <X^2>.
     double mean = 0;
-    for (std::size_t i = 0; i < timings.size(); ++i)
-        mean += static_cast<double>(timings[i]) / static_cast<double>(timings.size());
-    double variance = 0;
-    for (std::size_t i = 0; i < timings.size(); ++i)
-        variance += (static_cast<double>(timings[i]) - mean) * (static_cast<double>(timings[i]) - mean) / static_cast<double>(timings.size());
-    return {mean, std::sqrt(variance)};
+    double mean_sq = 0;
+    for (const std::chrono::milliseconds::rep timing : timings)
+    {
+        mean += static_cast<double>(timing);
+        mean_sq += static_cast<double>(timing * timing);
+    }
+    mean /= static_cast<double>(timings.size());
+    mean_sq /= static_cast<double>(timings.size());
+    // The variance is given by <(X - <X>)^2> = <X^2> - <X>^2. The standard deviation is the square root of the variance.
+    return {mean, std::sqrt(mean_sq - (mean * mean))};
 }
 
 /**
@@ -2918,10 +3267,10 @@ double mandelbrot_escape(const std::complex<double> c)
  */
 struct [[nodiscard]] color
 {
-    color() = default;
+    constexpr color() = default;
 
     template <typename T>
-    color(const T r_, const T g_, const T b_) : r(static_cast<std::uint8_t>(r_)), g(static_cast<std::uint8_t>(g_)), b(static_cast<std::uint8_t>(b_))
+    constexpr color(const T r_, const T g_, const T b_) : r(static_cast<std::uint8_t>(r_)), g(static_cast<std::uint8_t>(g_)), b(static_cast<std::uint8_t>(b_))
     {
     }
 
@@ -2951,8 +3300,8 @@ color interpolate_colors(const color& first, const color& second, const double t
  */
 color iter_to_color(const double iterations)
 {
-    // Define a nice color pallette for the image.
-    static const std::vector<color> palette = {{66, 30, 15}, {25, 7, 26}, {9, 1, 47}, {4, 4, 73}, {0, 7, 100}, {12, 44, 138}, {24, 82, 177}, {57, 125, 209}, {134, 181, 229}, {211, 236, 248}, {241, 233, 191}, {248, 201, 95}, {255, 170, 0}, {204, 128, 0}, {153, 87, 0}, {106, 52, 3}};
+    // Define a nice color palette for the image.
+    static constexpr std::array<color, 16> palette = {{{66, 30, 15}, {25, 7, 26}, {9, 1, 47}, {4, 4, 73}, {0, 7, 100}, {12, 44, 138}, {24, 82, 177}, {57, 125, 209}, {134, 181, 229}, {211, 236, 248}, {241, 233, 191}, {248, 201, 95}, {255, 170, 0}, {204, 128, 0}, {153, 87, 0}, {106, 52, 3}}};
 
     // Points that are in the set (or at least, suspected to be in the set because they did not diverge after the maximum number of iterations) will be black.
     if (iterations == max_iter)
@@ -3012,7 +3361,6 @@ void calculate_mandelbrot(image_matrix<color>& image, const std::size_t start, c
  *
  * @param image The matrix containing the pixels.
  * @param filename The output file name.
- * @return `true` if the file was saved successfully, `false` otherwise.
  */
 void save_bmp(const image_matrix<color>& image, const std::string& filename)
 {
@@ -3020,11 +3368,11 @@ void save_bmp(const image_matrix<color>& image, const std::string& filename)
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open())
     {
-        sync_out.println("Error: Could not create the file ", filename, '.');
+        logln_ansi(ansi_error, "Error: Could not create the file ", filename, '.');
         return;
     }
 
-    sync_out.print("Saving image to a BMP file: [");
+    log("Saving image to a BMP file: [");
 
     // Calculate the size of the BMP file in bytes.
     const std::uint32_t width = static_cast<std::uint32_t>(image.get_width());
@@ -3067,11 +3415,11 @@ void save_bmp(const image_matrix<color>& image, const std::string& filename)
             file.write(reinterpret_cast<const char*>(padding_bytes), num_padding_bytes);
         }
         if (y % (height / 10) == 0)
-            sync_out.print('.');
+            log('.');
     }
 
     file.close();
-    sync_out.println("]\nMandelbrot image saved successfully as ", filename, '.');
+    logln("]\nMandelbrot image saved successfully as ", filename, '.');
 }
 
 /**
@@ -3129,6 +3477,119 @@ private:
 }; // class timer
 
 /**
+ * @brief Map a color to a monochrome Unicode block based on its brightness, using luma coefficients.
+ *
+ * @param col The color.
+ * @return The Unicode block representing the brightness of the color, in UTF-8.
+ */
+std::string_view brightness_block(const color& col)
+{
+    // Define Unicode blocks from darkest to brightest in UTF-8.
+    constexpr std::array<std::string_view, 5> blocks = {" ", "\xE2\x96\x91", "\xE2\x96\x92", "\xE2\x96\x93", "\xE2\x96\x88"};
+    // Compute the perceived brightness using luma coefficients. Each color component is a number in the range 0-255, and the coefficients sum to 1, so the brightness is also in the range 0-255.
+    const double brightness = (0.2126 * col.r) + (0.7152 * col.g) + (0.0722 * col.b);
+    // Quantize the brightness into 5 levels. A brightness of 0 maps to level 0, and a brightness of 255 maps to level 4.
+    const std::size_t level = static_cast<std::size_t>(std::round(brightness * 4.0 / 255.0));
+    // Return the corresponding block character.
+    return blocks[level];
+}
+
+/**
+ * @brief Create a plot of an image as characters, using either 24-bit ANSI colors or monochrome blocks of different brightness.
+ *
+ * @param image The image to plot.
+ * @param out_width The plot width in terminal characters. Should be even, since in the monochrome case each pixel spans two characters horizontally.
+ * @param use_color `true` to generate a colored plot, `false` to generate a monochrome plot.
+ * @return The plot as a string.
+ */
+std::string plot_image_chars(const image_matrix<color>& image, const std::size_t out_width, const bool use_color)
+{
+    // Get the source image dimensions.
+    const std::size_t src_width = image.get_width();
+    const std::size_t src_height = image.get_height();
+    // Compute the plot height in terminal characters, keeping in mind that characters have an aspect ratio of about 1:2 (width:height).
+    const std::size_t out_height = static_cast<std::size_t>(std::llround(0.5 * static_cast<double>(src_height) * static_cast<double>(out_width) / static_cast<double>(src_width)));
+    // Create a buffer for the plot.
+    std::string plot;
+
+    // For the colored plot we use Unicode lower half blocks to pack two pixels per character. The background color sets the color of the top (empty) half, and the foreground color sets the color of the bottom (filled) half.
+    if (use_color)
+    {
+        // Each character row contains two pixel rows (top and bottom).
+        const std::size_t out_height_pixels = out_height * 2;
+        // Create a mapping of output x coordinates to source pixels, such that x_map[0] = 0 and x_map[out_width - 1] = src_width - 1.
+        std::vector<std::size_t> x_map(out_width);
+        for (std::size_t x = 0; x < out_width; ++x)
+            x_map[x] = (x * (src_width - 1)) / (out_width - 1);
+        // Create a mapping of output pixel y coordinates to source pixels, such that y_map[0] = 0 and y_map[out_height_pixels - 1] = src_height - 1.
+        std::vector<std::size_t> y_map(out_height_pixels);
+        for (std::size_t y = 0; y < out_height_pixels; ++y)
+            y_map[y] = (y * (src_height - 1)) / (out_height_pixels - 1);
+        // Reserve enough capacity for the entire plot to avoid reallocations. Each row contains ANSI codes of the form `\033[48;2;RRR;GGG;BBBm\033[38;2;RRR;GGG;BBBm` = up to 38 bytes, plus the Unicode lower half block U+2584 in UTF-8 = 3 bytes, for a total of 41 bytes per character of the plot, plus the `\033[0m` reset code at the end and the newline = 5 bytes.
+        plot.reserve(out_height * ((out_width * 41) + 5));
+        // Iterate over the rows and columns.
+        for (std::size_t y = 0; y < out_height; ++y)
+        {
+            for (std::size_t x = 0; x < out_width; ++x)
+            {
+                // Fetch the sampled source pixel for the top and bottom halves.
+                const color col_top = image(x_map[x], y_map[2 * y]);
+                const color col_bottom = image(x_map[x], y_map[(2 * y) + 1]);
+                // Create the background color ANSI sequence for the top half.
+                plot.append("\033[48;2;");
+                plot.append(std::to_string(col_top.r));
+                plot.push_back(';');
+                plot.append(std::to_string(col_top.g));
+                plot.push_back(';');
+                plot.append(std::to_string(col_top.b));
+                // Finish the sequence with `m` and create the foreground color ANSI sequence for the bottom half.
+                plot.append("m\033[38;2;");
+                plot.append(std::to_string(col_bottom.r));
+                plot.push_back(';');
+                plot.append(std::to_string(col_bottom.g));
+                plot.push_back(';');
+                plot.append(std::to_string(col_bottom.b));
+                // Finish the sequence with `m` and append a lower half block (U+2584) in UTF-8, which is the actual character that will be displayed.
+                plot.append("m\xE2\x96\x84");
+            }
+            // Reset the ANSI style at the end of the row and add a newline character.
+            plot.append("\033[0m\n");
+        }
+    }
+    // For the monochrome plot we use Unicode block characters of different brightness levels. Each pixel is rendered as two identical blocks side-by-side to make the pixels square (so essentially, the opposite of the colored plot).
+    else
+    {
+        // Each pixel spans two terminal characters horizontally.
+        const std::size_t out_width_pixels = out_width / 2;
+        // Create a mapping of output x coordinates to source pixels, such that x_map[0] = 0 and x_map[out_width_pixels - 1] = src_width - 1.
+        std::vector<std::size_t> x_map(out_width_pixels);
+        for (std::size_t x = 0; x < out_width_pixels; ++x)
+            x_map[x] = (x * (src_width - 1)) / (out_width_pixels - 1);
+        // Create a mapping of output y coordinates to source pixels, such that y_map[0] = 0 and y_map[out_height - 1] = src_height - 1.
+        std::vector<std::size_t> y_map(out_height);
+        for (std::size_t y = 0; y < out_height; ++y)
+            y_map[y] = (y * (src_height - 1)) / (out_height - 1);
+        // Reserve enough capacity for the entire plot to avoid reallocations. The UTF-8 blocks can take up to 3 bytes each, plus a newline after each row.
+        plot.reserve(out_height * ((out_width * 3) + 1));
+        // Iterate over the rows and columns.
+        for (std::size_t y = 0; y < out_height; ++y)
+        {
+            for (std::size_t x = 0; x < out_width_pixels; ++x)
+            {
+                // Fetch the sampled source pixel and map to a Unicode block based on brightness.
+                const color col = image(x_map[x], y_map[y]);
+                const std::string_view block = brightness_block(col);
+                plot.append(block);
+                plot.append(block);
+            }
+            // Add a newline after each row.
+            plot.push_back('\n');
+        }
+    }
+    return plot;
+}
+
+/**
  * @brief Benchmark multithreaded performance by calculating the Mandelbrot set.
  *
  * @param benchmark Whether to perform the full benchmarks.
@@ -3146,15 +3607,15 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
             BS::set_os_process_priority(BS::os_process_priority::above_normal);
 
     const std::string process_priority = os_process_priority_name(BS::get_os_process_priority());
-    sync_out.println("Process priority set to: ", process_priority, ".");
+    logln("Process priority set to: ", process_priority, ".");
     if (process_priority != "realtime")
-        sync_out.println("Note: Please run as admin/root to enable a higher process priority.");
+        logln_ansi(ansi_info, "Note: Please run as admin/root to enable a higher process priority.");
 
     try_os_thread_priority();
     const std::string thread_priority = os_thread_priority_name(BS::this_thread::get_os_thread_priority());
-    sync_out.println("Thread priority set to: ", thread_priority, ".");
+    logln("Thread priority set to: ", thread_priority, ".");
     if (thread_priority != "realtime")
-        sync_out.println("Note: Please run as admin/root to enable a higher thread priority.");
+        logln_ansi(ansi_info, "Note: Please run as admin/root to enable a higher thread priority.");
 
     // Initialize a thread pool with the default number of threads, and ensure that the threads have the highest possible priority, so that other processes do not interfere with the benchmarks.
     BS::thread_pool pool(try_os_thread_priority);
@@ -3165,10 +3626,10 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
 
     // Store the number of available hardware threads for easy access.
     const std::size_t thread_count = pool.get_thread_count();
-    sync_out.println("Using ", thread_count, " threads.");
+    logln("Using ", thread_count, " threads.");
 
     // Set the formatting of floating point numbers.
-    sync_out.print(std::fixed, std::setprecision(1));
+    log(std::fixed, std::setprecision(1));
 
     // Initialize a timer object to measure execution time.
     timer tmr;
@@ -3177,7 +3638,7 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
     constexpr std::chrono::milliseconds::rep target_ms = 50;
 
     // Find the Mandelbrot image size that will roughly achieve the target execution time.
-    sync_out.println("Determining the Mandelbrot image size needed to achieve an approximate mean execution time of ", target_ms, " ms with ", thread_count, " tasks...");
+    logln("Determining the Mandelbrot image size needed to achieve an approximate mean execution time of ", target_ms, " ms with ", thread_count, " tasks...");
     std::size_t image_size = thread_count;
     image_matrix<color> image;
     std::size_t jump = 1;
@@ -3202,7 +3663,7 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
 
     // Scale the image size to fit the target execution time more precisely, keeping in mind that the time complexity is O(image_size^2).
     image_size = static_cast<std::size_t>(std::llround(static_cast<double>(image_size) * std::sqrt(static_cast<double>(target_ms) / static_cast<double>(tmr.ms()))));
-    sync_out.println("Result: ", image_size, 'x', image_size, " pixels.");
+    logln("Result: ", image_size, 'x', image_size, " pixels.");
 
     if (benchmark)
     {
@@ -3217,8 +3678,8 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
         // Since we are repeating the same test multiple times, we might as well use different parts of the complex plane in each repetition. However, we have to spread the calculations evenly to avoid biasing the results, as some regions have much higher escape times than others. So we calculate the whole image, but at an offset from 0 to `num_repeats`.
         jump = num_repeats;
         const std::size_t benchmark_image_size = static_cast<std::size_t>(std::floor(static_cast<double>(image_size) * std::sqrt(num_repeats)));
-        sync_out.println("Generating a ", benchmark_image_size, 'x', benchmark_image_size, " plot of the Mandelbrot set...");
-        sync_out.println("Each test will be repeated ", num_repeats, " times to collect reliable statistics.");
+        logln("Generating a ", benchmark_image_size, 'x', benchmark_image_size, " plot of the Mandelbrot set...");
+        logln("Each test will be repeated ", num_repeats, " times to collect reliable statistics.");
 
         // Perform the test.
         std::vector<std::size_t> try_tasks;
@@ -3230,10 +3691,10 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
             image = image_matrix<color>(benchmark_image_size, benchmark_image_size);
             try_tasks.push_back(num_tasks);
             if (num_tasks == 0)
-                sync_out.print(std::setw(width_tasks), 1, " task:  ");
+                log(std::setw(width_tasks), 1, " task:  ");
             else
-                sync_out.print(std::setw(width_tasks), num_tasks, " tasks: ");
-            sync_out.print('[');
+                log(std::setw(width_tasks), num_tasks, " tasks: ");
+            log('[', BS::synced_stream::flush);
             for (std::size_t i = 0; i < num_repeats; ++i)
             {
                 // Measure execution time for this test.
@@ -3251,11 +3712,11 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
                 // Save the measurement for later analysis.
                 same_n_timings.push_back(tmr.ms());
                 // Print a dot to inform the user that we've made progress.
-                sync_out.print('.');
+                log('.', BS::synced_stream::flush);
                 // Increase the offset so we calculate a different part of the image in each repetition of the test.
                 offset = (offset + 1) % num_repeats;
             }
-            sync_out.println(']', (num_tasks == 0) ? "  (single-threaded)" : "");
+            logln(']', (num_tasks == 0) ? "  (single-threaded)" : "");
             // Analyze, print, and save the mean and standard deviation of all the tests with the same number of tasks.
             const mean_sd stats = analyze(same_n_timings);
             const std::chrono::milliseconds::rep total_time = std::reduce(same_n_timings.begin(), same_n_timings.end());
@@ -3285,22 +3746,39 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
         constexpr std::chrono::milliseconds::rep total_ms = 5000;
         const std::size_t plot_image_size = static_cast<std::size_t>(std::floor(static_cast<double>(image_size) * std::sqrt(static_cast<double>(total_ms) / static_cast<double>(target_ms))));
         image = image_matrix<color>(plot_image_size, plot_image_size);
-        sync_out.print("Generating a ", plot_image_size, 'x', plot_image_size, " plot of the Mandelbrot set with ", thread_count, " tasks: [");
+        log("Generating a ", plot_image_size, 'x', plot_image_size, " plot of the Mandelbrot set with ", thread_count, " tasks: [", BS::synced_stream::flush);
         pool.detach_blocks(0, plot_image_size * plot_image_size,
             [&image](const std::size_t start, const std::size_t end)
             {
                 calculate_mandelbrot(image, start, end, 1, 0);
-                sync_out.print('.');
+                log('.', BS::synced_stream::flush);
             });
         pool.wait();
         tmr.stop();
-        sync_out.println("]\nDone in ", tmr.ms(), " ms (", static_cast<double>(plot_image_size * plot_image_size) / static_cast<double>(tmr.ms()), " pixels/ms).");
+        logln("]\nDone in ", tmr.ms(), " ms (", static_cast<double>(plot_image_size * plot_image_size) / static_cast<double>(tmr.ms()), " pixels/ms).");
     }
 
+    logln();
+    // Set the plot width in terminal characters.
+    constexpr std::size_t plot_width = 120;
+    // Generate a colored or monochrome plot as needed.
+    std::string plot_color;
+    std::string plot_mono;
+    if (use_stdout && !no_color)
+        plot_color = plot_image_chars(image, plot_width, true);
+    if (use_log || (use_stdout && no_color))
+        plot_mono = plot_image_chars(image, plot_width, false);
+    // Write the plots to stdout and/or the log file.
+    if (use_stdout)
+        sync_cout.print(no_color ? plot_mono : plot_color);
+    if (use_log)
+        sync_log.print(plot_mono);
+
+    // Save the plot to a BMP file if requested.
     if (save)
         save_bmp(image, "BS_thread_pool_benchmark_mandelbrot.bmp");
 
-    print_header("Thread pool performance test completed!", '+');
+    print_header("Thread pool performance test completed successfully!", '+', ansi_success);
 }
 
 // ==================================
@@ -3312,7 +3790,7 @@ void check_performance(const bool benchmark, const bool plot, const bool save)
  */
 void show_intro()
 {
-    sync_out.println(R"(
+    logln_ansi(ansi_title, R"(
 ██████  ███████       ████████ ██   ██ ██████  ███████  █████  ██████          ██████   ██████   ██████  ██
 ██   ██ ██      ██ ██    ██    ██   ██ ██   ██ ██      ██   ██ ██   ██         ██   ██ ██    ██ ██    ██ ██
 ██████  ███████          ██    ███████ ██████  █████   ███████ ██   ██         ██████  ██    ██ ██    ██ ██
@@ -3320,32 +3798,30 @@ void show_intro()
 ██████  ███████          ██    ██   ██ ██   ██ ███████ ██   ██ ██████  ███████ ██       ██████   ██████  ███████
 )");
 
-    sync_out.println("BS::thread_pool: a fast, lightweight, modern, and easy-to-use C++17/C++20/C++23 thread pool library");
-    sync_out.println("(c) 2024 Barak Shoshany (baraksh@gmail.com) (https://baraksh.com/)");
-    sync_out.println("GitHub: https://github.com/bshoshany/thread-pool");
-    sync_out.println();
+    logln_ansi(ansi_title_italic, "BS::thread_pool:", " a fast, lightweight, modern, and easy-to-use C++17/C++20/C++23 thread pool library");
+    logln_ansi(ansi_title_italic, "Copyright (c) 2021-2026 Barak Shoshany (baraksh@gmail.com) (https://baraksh.com/)");
+    logln_ansi(ansi_title_italic, "GitHub: https://github.com/bshoshany/thread-pool");
+    logln();
 
-    sync_out.println("Thread pool library version is v", BS::thread_pool_version, '.');
-    sync_out.println("Thread pool library imported using: ", BS::thread_pool_module ? "import BS.thread_pool (" : "#include \"BS_thread_pool.hpp\" (no ", "C++20 modules).");
-    sync_out.println();
-    sync_out.println("C++ Standard Library imported using:");
-    sync_out.println("* Thread pool library: ", BS::thread_pool_import_std ? "import std (" : "#include <...> (no ", "C++23 std module).");
-    sync_out.println("* Test program: ", using_import_std ? "import std (" : "#include <...> (no ", "C++23 std module).");
-    sync_out.println();
-
-    sync_out.println("Native extensions are ", BS::thread_pool_native_extensions ? "enabled" : "disabled", '.');
-
-    sync_out.println();
-
-    sync_out.println("Detected OS: ", detect_os(), '.');
-    sync_out.println("Detected compiler: ", detect_compiler(), '.');
-    sync_out.println("Detected standard library: ", detect_lib(), '.');
-    sync_out.println("Detected C++ standard: ", detect_cpp_standard(), '.');
-    sync_out.println("Detected features:");
+    print_key_values("Thread pool library version is: ", 'v', BS::thread_pool_version);
+    print_key_values("Thread pool library imported using: ", BS::thread_pool_module ? "import BS.thread_pool (" : "#include \"BS_thread_pool.hpp\" (no ", "C++20 modules)");
+    logln();
+    logln_ansi(ansi_title_underline, "C++ Standard Library imported using:");
+    print_key_values("* Thread pool library: ", BS::thread_pool_import_std ? "import std (" : "#include <...> (no ", "C++23 std module)");
+    print_key_values("* Test program: ", using_import_std ? "import std (" : "#include <...> (no ", "C++23 std module)");
+    logln();
+    print_key_values("Detected OS: ", detect_os());
+    print_key_values("Detected compiler: ", detect_compiler());
+    print_key_values("Detected standard library: ", detect_lib());
+    print_key_values("Detected C++ standard: ", detect_cpp_standard(), " (__cplusplus = ", __cplusplus, ")");
+    logln();
+    logln_ansi(ansi_title_underline, "Detected features:");
     print_features();
-
-    sync_out.println("Hardware concurrency is ", std::thread::hardware_concurrency(), '.');
-    sync_out.println("Important: Please do not run any other applications, especially multithreaded applications, in parallel with this test!");
+    print_key_values("Native extensions are: ", BS::thread_pool_native_extensions ? "Enabled" : "Disabled");
+    print_key_values("Hardware concurrency is: ", std::thread::hardware_concurrency());
+    logln();
+    log_ansi(ansi_title_underline, "Important:");
+    logln_ansi(ansi_title, " Please do not run any other applications, especially multithreaded applications, in parallel with this test!");
 }
 
 /**
@@ -3365,23 +3841,26 @@ std::string get_time()
     #if defined(_MSC_VER) && !defined(__cpp_lib_modules)
     // If MSVC is detected, use `localtime_s()` to avoid warning C4996. (This doesn't work if we used `import std`, so we check that to be on the safe side, although in that case `std::format` should be available anyway).
     if (localtime_s(&local_tm, &epoch) != 0)
-        return "";
+        time_string = "";
     #elif defined(__linux__) || defined(__APPLE__)
     // On Linux or macOS, use `localtime_r()` to avoid clang-tidy warning `concurrency-mt-unsafe`.
     if (localtime_r(&epoch, &local_tm) == nullptr)
-        return "";
+        time_string = "";
     #else
-    local_tm = *std::localtime(&epoch);
+    local_tm = *std::localtime(&epoch); // NOLINT(concurrency-mt-unsafe)
     #endif
-    const std::size_t bytes = std::strftime(time_string.data(), time_string.length() + 1, "%Y-%m-%d_%H.%M.%S", &local_tm);
-    if (bytes != time_string.length())
-        return "";
+    if (!time_string.empty())
+    {
+        const std::size_t bytes = std::strftime(time_string.data(), time_string.length() + 1, "%Y-%m-%d_%H.%M.%S", &local_tm);
+        if (bytes != time_string.length())
+            time_string = "";
+    }
     return time_string;
 #endif
 }
 
 /**
- * @brief A class to parse command line arguments. All arguments are assumed to be on/off and default to off.
+ * @brief A class to parse command line arguments. All arguments are simple on/off flags.
  */
 class [[nodiscard]] arg_parser
 {
@@ -3434,16 +3913,16 @@ public:
         int width = 1;
         for (const auto& [arg, opt] : allowed)
             width = std::max(width, static_cast<int>(arg.size()));
-        sync_out.println("\nAvailable options (all are on/off and default to off):");
+        logln("\nAvailable options (all are on/off and default to off):");
         for (const auto& [arg, opt] : allowed)
-            sync_out.println("  ", std::left, std::setw(width), arg, "  ", opt.desc);
-        sync_out.print("If no options are entered, the default is:\n  ");
+            logln("  ", std::left, std::setw(width), arg, "  ", opt.desc);
+        log("If no options are entered, the default is:\n  ");
         for (const auto& [arg, opt] : allowed)
         {
             if (opt.def)
-                sync_out.print(arg, " ");
+                log(arg, " ");
         }
-        sync_out.println();
+        logln();
     }
 
     /**
@@ -3492,6 +3971,7 @@ private:
      */
     std::string_view executable;
 }; // class arg_parser
+} // anonymous namespace
 
 int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
 {
@@ -3499,9 +3979,14 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
     try
     {
 #endif
-        // If the file default_args.txt exists, read the default arguments from it (space separated in a single line). Otherwise, use the built-in defaults. This is useful when debugging.
+        // Disable ANSI colors if the environment variable `NO_COLOR` is set.
+        no_color = (std::getenv("NO_COLOR") != nullptr); // NOLINT(concurrency-mt-unsafe)
+
+        // If the file default_args.txt exists in either this folder or the parent folder, read the default arguments from it (space separated in a single line). Otherwise, use the built-in defaults. This is useful when debugging.
         std::map<std::string, bool> defaults;
         std::ifstream default_args_file("default_args.txt");
+        if (!default_args_file.is_open())
+            default_args_file.open("../default_args.txt");
         if (default_args_file.is_open())
         {
             std::string line;
@@ -3540,24 +4025,22 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
             {
                 show_intro();
                 args.show_help();
-                sync_out.println("\nERROR: No output stream specified! Please enter one or more of: log, stdout. Aborting.");
+                logln_ansi(ansi_error, "\nERROR: No output stream specified! Please enter one or more of: log, stdout. Aborting.");
                 return 0;
             }
             if (!args["benchmarks"] && !args["deadlock"] && !args["plot"] && !args["tests"])
             {
                 show_intro();
                 args.show_help();
-                sync_out.println("\nERROR: No tests or benchmarks requested! Please enter one or more of: benchmarks, deadlock, plot, tests. Aborting.");
+                logln_ansi(ansi_error, "\nERROR: No tests or benchmarks requested! Please enter one or more of: benchmarks, deadlock, plot, tests. Aborting.");
                 return 0;
             }
         }
 
-        if (!args["stdout"])
-            sync_out.remove_stream(std::cout);
-
         // A stream object used to access the log file.
         std::ofstream log_file;
 
+        sync_log.remove_stream(std::cout);
         if (args["log"])
         {
             // Extract the name of the executable file, or use a default value if it is not available.
@@ -3571,15 +4054,18 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
             log_file.open(log_filename);
             if (log_file.is_open())
             {
-                sync_out.print("Generating log file: ", log_filename, ".\n");
-                sync_out.add_stream(log_file);
+                logln_ansi(ansi_info, "Generating log file: ", log_filename);
+                sync_log.add_stream(log_file);
             }
             else
             {
-                sync_out.println("ERROR: Could not create a log file.");
+                logln_ansi(ansi_error, "ERROR: Could not create a log file.");
                 return 1;
             }
         }
+
+        use_stdout = args["stdout"];
+        use_log = args["log"];
 
         show_intro();
 
@@ -3615,7 +4101,7 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
             check_exceptions_submit();
             check_exceptions_multi_future();
 #else
-        print_header("NOTE: Exceptions are disabled, skipping wait deadlock check and exception handling tests.");
+        logln_ansi(ansi_info, "NOTE: Exceptions are disabled, skipping wait deadlock check and exception handling tests.");
 #endif
 
             print_header("Checking detach_loop() and submit_loop():");
@@ -3664,42 +4150,42 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
     #ifndef _WIN32
             if ((args["benchmarks"] || args["plot"]) && !BS::set_os_process_priority(BS::os_process_priority::realtime))
             {
-                sync_out.println("NOTE: Skipping process/thread priority checks since the test is running on Linux/macOS without root privileges and benchmarks are enabled. On Linux/macOS, if priorities are decreased, they cannot be increased back to normal without root privileges, so the process will be stuck on the lowest priority, and the benchmarks will be unreliable.\n");
+                logln_ansi(ansi_info, "NOTE: Skipping process/thread priority checks since the test is running on Linux/macOS without root privileges and benchmarks are enabled. On Linux/macOS, if priorities are decreased, they cannot be increased back to normal without root privileges, so the process will be stuck on the lowest priority, and the benchmarks will be unreliable.\n");
             }
             else
     #endif
             {
                 // Note: We have to check thread priorities first, because the check for process priorities lowers the priority of the process to the lowest level, and on Linux, if not running as root, we can only lower the priority, not raise it, so the process gets stuck on the lowest priority. Since the thread priorities cannot be set to higher than the process priorities, this means the thread priorities will also be stuck on the lowest priority, and the test will fail.
                 check_os_thread_priorities();
-                sync_out.println();
+                logln();
                 check_os_process_priorities();
-                sync_out.println();
+                logln();
             }
             check_os_thread_names();
-            sync_out.println();
+            logln();
     #if defined(_WIN32) || defined(__linux__)
             check_os_thread_affinity();
-            sync_out.println();
+            logln();
             check_os_process_affinity();
     #else
-            sync_out.println("NOTE: macOS does not support affinity, skipping the corresponding test.");
+            logln_ansi(ansi_info, "NOTE: macOS does not support affinity, skipping the corresponding test.");
     #endif
 #else
-        print_header("NOTE: Native extensions disabled, skipping the corresponding test.");
+        logln_ansi(ansi_info, "NOTE: Native extensions disabled, skipping the corresponding test.");
 #endif
         }
 
         if (args["deadlock"])
         {
             print_header("Checking for deadlocks:");
-            sync_out.println("Checking for destruction deadlocks...");
+            logln("Checking for destruction deadlocks...");
             check_deadlock(
                 []
                 {
                     BS::thread_pool temp_pool;
                     temp_pool.detach_task([] {});
                 });
-            sync_out.println("Checking for reset deadlocks...");
+            logln("Checking for reset deadlocks...");
             BS::thread_pool temp_pool;
             check_deadlock(
                 [&temp_pool]
@@ -3710,14 +4196,14 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
 
         if (test_results::tests_failed > 0)
         {
-            print_header("FAILURE: Passed " + std::to_string(test_results::tests_succeeded) + " checks, but failed " + std::to_string(test_results::tests_failed) + "!", '+');
-            sync_out.println("\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
+            print_header("FAILURE: Passed " + std::to_string(test_results::tests_succeeded) + " checks, but failed " + std::to_string(test_results::tests_failed) + "!", '+', ansi_error);
+            logln_ansi(ansi_error, "\nPlease submit a bug report at https://github.com/bshoshany/thread-pool/issues including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file.");
             log_file.close();
             return static_cast<int>(test_results::tests_failed);
         }
 
-        if (args["tests"])
-            print_header("SUCCESS: Passed all " + std::to_string(test_results::tests_succeeded) + " checks!", '+');
+        if (test_results::tests_succeeded > 0)
+            print_header("SUCCESS: Passed all " + std::to_string(test_results::tests_succeeded) + " checks!", '+', ansi_success);
 
         if (args["benchmarks"] || args["plot"])
             check_performance(args["benchmarks"], args["plot"], args["save"]);
@@ -3728,7 +4214,7 @@ int main(int argc, char* argv[]) // NOLINT(bugprone-exception-escape)
     }
     catch (const std::exception& e)
     {
-        sync_out.println("ERROR: Tests failed due to exception: ", e.what());
+        logln_ansi(ansi_error, "ERROR: Tests failed due to exception: ", e.what());
         return 1;
     }
 #endif

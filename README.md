@@ -18,7 +18,7 @@ Email: <baraksh@gmail.com>\
 Website: <https://baraksh.com/>\
 GitHub: <https://github.com/bshoshany>
 
-This is the complete documentation for **v5.0.0** of the library, released on **2024-12-19**.
+This is the complete documentation for **v5.1.0** of the library, released on **2026-01-03**.
 
 * [Introduction](#introduction)
     * [Motivation](#motivation)
@@ -43,9 +43,9 @@ This is the complete documentation for **v5.0.0** of the library, released on **
     * [Loops with return values](#loops-with-return-values)
     * [Parallelizing sequences](#parallelizing-sequences)
     * [More about `BS::multi_future`](#more-about-bsmulti_future)
+    * [Submitting tasks in bulk without a loop](#submitting-tasks-in-bulk-without-a-loop)
 * [Utility classes](#utility-classes)
     * [Synchronizing printing to a stream with `BS::synced_stream`](#synchronizing-printing-to-a-stream-with-bssynced_stream)
-    * [Synchronizing tasks with `BS::counting_semaphore` and `BS::binary_semaphore`](#synchronizing-tasks-with-bscounting_semaphore-and-bsbinary_semaphore)
 * [Managing tasks](#managing-tasks)
     * [Monitoring the tasks](#monitoring-the-tasks)
     * [Purging tasks](#purging-tasks)
@@ -82,12 +82,13 @@ This is the complete documentation for **v5.0.0** of the library, released on **
     * [Enabling `import std`](#enabling-import-std)
     * [Compiling with `compile_cpp.py` using `import std`](#compiling-with-compile_cpppy-using-import-std)
     * [Compiling with Clang and LLVM libc++ using `import std`](#compiling-with-clang-and-llvm-libc-using-import-std)
+    * [Compiling with GCC and GNU libstdc++ using `import std`](#compiling-with-gcc-and-gnu-libstdc-using-import-std)
     * [Compiling with MSVC and Microsoft STL using `import std`](#compiling-with-msvc-and-microsoft-stl-using-import-std)
     * [Compiling with CMake using `import std`](#compiling-with-cmake-using-import-std)
 * [Installing the library using package managers](#installing-the-library-using-package-managers)
     * [Installing using vcpkg](#installing-using-vcpkg)
-    * [Installing using Conan](#installing-using-conan)
     * [Installing using Meson](#installing-using-meson)
+    * [Installing using Conan](#installing-using-conan)
     * [Installing using CMake with CPM](#installing-using-cmake-with-cpm)
     * [Installing using CMake with `FetchContent`](#installing-using-cmake-with-fetchcontent)
 * [Complete library reference](#complete-library-reference)
@@ -102,7 +103,7 @@ This is the complete documentation for **v5.0.0** of the library, released on **
     * [All names exported by the C++20 module](#all-names-exported-by-the-c20-module)
 * [Development tools](#development-tools)
     * [The `compile_cpp.py` script](#the-compile_cpppy-script)
-    * [Other included tools](#other-included-tools)
+    * [Visual Studio Code tasks](#visual-studio-code-tasks)
 * [About the project](#about-the-project)
     * [Bug reports and feature requests](#bug-reports-and-feature-requests)
     * [Contribution and pull request policy](#contribution-and-pull-request-policy)
@@ -144,10 +145,10 @@ Obtaining the library is quick and easy; it can be downloaded manually from [the
     * Header-only: no need to install or build the library.
     * Self-contained: no external requirements or dependencies.
     * Portable: uses only the C&plus;&plus; standard library, and works with any C&plus;&plus;17-compliant compiler on any platform.
-    * Only 487 lines of code, including all optional features and utility classes (excluding comments, blank lines, lines containing only a single brace, C&plus;&plus;17 polyfills, and native extensions).
+    * Only 536 lines of code, including all optional features and utility classes (excluding comments, blank lines, lines containing only a single brace, C&plus;&plus;17/20 polyfills, and native extensions).
 * **Modern:**
     * Fully supports C&plus;&plus;17, C&plus;&plus;20, and C&plus;&plus;23, taking advantage of the latest language features when available for maximum performance, reliability, and usability.
-    * In C&plus;&plus;20, the library can an be imported as a C&plus;&plus;20 module using [`import BS.thread_pool`](#importing-the-library-as-a-c20-module), with many benefits, such as faster compilation times and avoiding namespace pollution.
+    * In C&plus;&plus;20, the library can be imported as a C&plus;&plus;20 module using [`import BS.thread_pool`](#importing-the-library-as-a-c20-module), with many benefits, such as faster compilation times and avoiding namespace pollution.
     * In C&plus;&plus;23, the library can import the C&plus;&plus; Standard Library as a module using [`import std`](#importing-the-c23-standard-library-as-a-module) on supported compilers and platforms.
     * Makes use of modern C&plus;&plus; programming practices for readability, maintainability, performance, safety, portability, and reliability.
 * **Easy to use:**
@@ -155,7 +156,7 @@ Obtaining the library is quick and easy; it can be downloaded manually from [the
     * Every task submitted to the queue using [`submit_task()`](#submitting-tasks-to-the-queue) automatically generates an `std::future`, which can be used to wait for the task to finish executing, obtain its eventual return value, and/or catch any thrown exceptions.
     * Loops can be automatically parallelized into any number of tasks using [`submit_loop()`](#parallelizing-loops), which returns a [`BS::multi_future`](#more-about-bsmulti_future) that can be used to track the execution of all parallel tasks at once.
     * If futures are not needed, tasks may be submitted using [`detach_task()`](#detaching-and-waiting-for-tasks), and loops can be parallelized using [`detach_loop()`](#parallelizing-loops-without-futures) - sacrificing convenience for even greater performance. In that case, `wait()`, `wait_for()`, and `wait_until()` can be used to wait for all the tasks in the queue to complete.
-    * Extremely thorough and detailed documentation, with numerous examples, is available in the library's [`README.md` file](https://github.com/bshoshany/thread-pool/blob/master/README.md), with a total of 3,359 lines and 25,506 words!
+    * Extremely thorough and detailed documentation, with numerous examples, is available in the library's [`README.md` file](https://github.com/bshoshany/thread-pool/blob/master/README.md), with a total of 3,486 lines and 26,700 words!
     * The code is thoroughly documented using Doxygen comments - not only the interface, but also the implementation, in case the user would like to make modifications.
     * Optionally, the included Python script [`compile_cpp.py`](#the-compile_cpppy-script) can be used to easily compile any programs that are using the library, with full support for C&plus;&plus;20 modules and C&plus;&plus;23 Standard Library modules where applicable.
 * **Additional features:**
@@ -167,10 +168,10 @@ Obtaining the library is quick and easy; it can be downloaded manually from [the
     * Run a cleanup function in each thread right before it is destroyed, using [`set_cleanup_func()`](#thread-cleanup-functions).
     * Assume lower-level control of parallelized loops using [`detach_blocks()` and `submit_blocks()`](#parallelizing-individual-indices-vs-blocks).
     * Parallelize a sequence of tasks enumerated by indices to the queue using [`detach_sequence()` and `submit_sequence()`](#parallelizing-sequences).
+    * Submit tasks in bulk from a container or iterator range using [`detach_bulk()` and `submit_bulk()`](#submitting-tasks-in-bulk-without-a-loop).
     * Get [information about the current thread](#getting-information-about-the-current-thread): the pool index using `BS::this_thread::get_index()` and a pointer to the owning pool using `BS::this_thread::get_pool()`.
     * Get the unique thread IDs for all threads in the pool using [`get_thread_ids()`](#getting-and-resetting-the-number-of-threads-in-the-pool).
     * Synchronize output to one or more streams from multiple threads in parallel using the [`BS::synced_stream`](#synchronizing-printing-to-a-stream-with-bssynced_stream) utility class.
-    * Access C&plus;&plus;20 semaphores in C&plus;&plus;17 using the [`BS::binary_semaphore` and `BS::counting_semaphore`](#synchronizing-tasks-with-bscounting_semaphore-and-bsbinary_semaphore) polyfill classes.
 * **Optional features:**
     * [Optional features](#enabling-features) can be enabled by passing a bitmask template parameter to the `BS::thread_pool` class template.
     * Assign a priority to each task using the optional [task priority](#setting-task-priority) feature. The priority, in the range -128 to +127, is passed as the last argument to all `submit` and `detach` member functions. Tasks with higher priorities will be executed first.
@@ -185,9 +186,9 @@ Obtaining the library is quick and easy; it can be downloaded manually from [the
     * Use [`BS::get_os_process_affinity()` and `BS::set_os_process_affinity()`](#setting-process-affinity) to get and set the processor affinity of the current process.
     * Get the implementation-defined thread handles for all threads in the pool using [`get_native_handles()`](#accessing-native-thread-handles).
 * **Well-tested:**
-    * The included test program [`BS_thread_pool_test.cpp`](#automated-tests) performs hundreds of automated tests, and also serves as a comprehensive example of how to properly use the library.
+    * The included test program [`BS_thread_pool_test.cpp`](#testing-the-library) performs hundreds of automated tests, and also serves as a comprehensive example of how to properly use the library.
     * The test program also performs [benchmarks](#performance-tests) using a highly-optimized multithreaded algorithm which generates a plot of the Mandelbrot set.
-    * The included Python script `test_all.py` provides a portable way to easily run the tests with multiple compilers.
+    * The included Python script [`compile_cpp.py`](#the-compile_cpppy-script) provides a portable way to automatically run the tests with all available compilers with one command.
     * [Compatibility](#compiling-and-compatibility) is comprehensively tested on the latest versions of Windows, Ubuntu, and macOS, using Clang, GCC, and MSVC.
     * Under continuous and active development. Bug reports and feature requests are welcome, and should be made via [GitHub issues](https://github.com/bshoshany/thread-pool/issues).
 
@@ -203,7 +204,7 @@ To install `BS::thread_pool`, simply download the [latest release](https://githu
 
 The thread pool will now be accessible via the `BS::thread_pool` class. For an even quicker installation, you can download the header file itself directly [at this URL](https://raw.githubusercontent.com/bshoshany/thread-pool/master/include/BS_thread_pool.hpp); no additional files are required, as the library is a single-header library.
 
-This library is also available on various package managers and build system, including [vcpkg](https://vcpkg.io/), [Conan](https://conan.io/), [Meson](https://mesonbuild.com/), and [CMake](https://cmake.org/). Please [see below](#installing-the-library-using-package-managers) for more details.
+This library is also available on various package managers and build systems, including [vcpkg](https://vcpkg.io/), [Conan](https://conan.io/), [Meson](https://mesonbuild.com/), and [CMake](https://cmake.org/). Please [see below](#installing-the-library-using-package-managers) for more details.
 
 If C&plus;&plus;20 features are available, the library can also be imported as a C&plus;&plus;20 module, in which case `#include "BS_thread_pool.hpp"` should be replaced with `import BS.thread_pool;`. This requires one additional file, and the module must be compiled before it can be used; please see detailed instructions [below](#importing-the-library-as-a-c20-module).
 
@@ -211,22 +212,22 @@ If C&plus;&plus;20 features are available, the library can also be imported as a
 
 This library officially supports C&plus;&plus;17, C&plus;&plus;20, and C&plus;&plus;23. If compiled with C&plus;&plus;20 and/or C&plus;&plus;23 support, the library will make use of newly available features for maximum performance and usability. However, the library is fully compatible with C&plus;&plus;17, and should successfully compile on any C&plus;&plus;17 standard-compliant compiler, on all operating systems and architectures for which such a compiler is available.
 
-Compatibility was verified using the bundled test program `BS_thread_pool_test.cpp`, compiled using the bundled Python scripts `test_all.py` and `compile_cpp.py` with native extensions enabled, importing the library [as a C&plus;&plus;20 module](#importing-the-library-as-a-c20-module) where applicable, and importing the [C&plus;&plus;23 Standard Library as a module](#importing-the-c23-standard-library-as-a-module) where applicable, on a 24-core (8P+16E) / 32-thread Intel i9-13900K CPU, using the following compilers, C&plus;&plus; standard libraries, and platforms:
+Compatibility was verified using the bundled test program [`BS_thread_pool_test.cpp`](#testing-the-library), compiled using the bundled Python script [`compile_cpp.py`](#the-compile_cpppy-script) with native extensions enabled, importing the library [as a C&plus;&plus;20 module](#importing-the-library-as-a-c20-module) where applicable, and importing the [C&plus;&plus;23 Standard Library as a module](#importing-the-c23-standard-library-as-a-module) where applicable, on a 24-core (8P+16E) / 32-thread Intel i9-13900K CPU, using the following compilers, C&plus;&plus; standard libraries, and platforms:
 
-* Windows 11 23H2 build 22631.4602:
-    * [Clang](https://clang.llvm.org/) v19.1.4 with LLVM libc&plus;&plus; v19.1.4 ([MSYS2 build](https://www.msys2.org/))
-    * [GCC](https://gcc.gnu.org/) v14.2.0 with GNU libstdc&plus;&plus; v14 (20240801) ([MSYS2 build](https://www.msys2.org/))
-    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.42.34435 with Microsoft STL v143 (202408).
-* Ubuntu 24.10:
-    * [Clang](https://clang.llvm.org/) v19.1.6 with LLVM libc&plus;&plus; v19.1.6
-    * [GCC](https://gcc.gnu.org/) v14.2.0 with GNU libstdc&plus;&plus; v14 (20240908)
+* Windows 11 25H2 build 26200.7462:
+    * [Clang](https://clang.llvm.org/) v21.1.8 with LLVM libc&plus;&plus; v21.1.8 ([MSYS2 build](https://www.msys2.org/))
+    * [GCC](https://gcc.gnu.org/) v15.2.0 with GNU libstdc&plus;&plus; v15 (20250808) ([MSYS2 build](https://www.msys2.org/))
+    * [MSVC](https://docs.microsoft.com/en-us/cpp/) v19.50.35721 with Microsoft STL v145 (202508).
+* Ubuntu 25.10:
+    * [Clang](https://clang.llvm.org/) v21.1.8 with LLVM libc&plus;&plus; v21.1.8
+    * [GCC](https://gcc.gnu.org/) v15.2.0 with GNU libstdc&plus;&plus; v15 (20250917)
 * macOS 15.1 build 24B83:
-    * [Clang](https://clang.llvm.org/) v19.1.6 with LLVM libc&plus;&plus; v19.1.6 ([Homebrew build](https://formulae.brew.sh/formula/llvm))
+    * [Clang](https://clang.llvm.org/) v21.1.8 with LLVM libc&plus;&plus; v21.1.8 ([Homebrew build](https://formulae.brew.sh/formula/llvm))
     * Note: Apple Clang is currently not officially supported, as it does not support C&plus;&plus;20 modules.
 
 As this library requires C&plus;&plus;17 features, the code must be compiled with C&plus;&plus;17 support:
 
-* For Clang or GCC, use the `-std=c++17` flag. On Linux, you will also need to use the `-pthread` flag to enable the POSIX threads library.
+* For Clang or GCC, use the `-std=c++17` flag.
 * For MSVC, use `/std:c++17`, and also `/permissive-` to ensure standards conformance.
 
 For maximum performance, it is recommended to compile with all available compiler optimizations:
@@ -234,17 +235,17 @@ For maximum performance, it is recommended to compile with all available compile
 * For Clang or GCC, use the `-O3` flag.
 * For MSVC, use `/O2`.
 
-As an example, to compile the test program `BS_thread_pool_test.cpp` with compiler optimizations, it is recommended to use the following commands:
+As an example, to compile the test program `BS_thread_pool_test.cpp` with compiler optimizations, first create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
 * Windows:
-    * GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -o BS_thread_pool_test.exe`
-    * Clang: `clang++ BS_thread_pool_test.cpp -std=c++17 -O3 -o BS_thread_pool_test.exe`
-    * MSVC: `cl BS_thread_pool_test.cpp /std:c++17 /permissive- /O2 /EHsc /Fo:BS_thread_pool_test.obj /Fe:BS_thread_pool_test.exe`
+    * GCC: `g++ -std=c++17 -O3 -I include tests/BS_thread_pool_test.cpp -o build/BS_thread_pool_test.exe`
+    * Clang: `clang++ -std=c++17 -O3 -I include tests/BS_thread_pool_test.cpp -o build/BS_thread_pool_test.exe`
+    * MSVC: `cl /std:c++17 /permissive- /O2 /EHsc /I include tests/BS_thread_pool_test.cpp /Fo:build/BS_thread_pool_test.obj /Fe:build/BS_thread_pool_test.exe` (in the Visual Studio Developer PowerShell for your CPU architecture)
 * Linux/macOS:
-    * GCC: `g++ BS_thread_pool_test.cpp -std=c++17 -O3 -pthread -o BS_thread_pool_test`
-    * Clang: `clang++ BS_thread_pool_test.cpp -std=c++17 -O3 -pthread -o BS_thread_pool_test`
+    * GCC: `g++ -std=c++17 -O3 -I include tests/BS_thread_pool_test.cpp -o build/BS_thread_pool_test`
+    * Clang: `clang++ -std=c++17 -O3 -I include tests/BS_thread_pool_test.cpp -o build/BS_thread_pool_test`
 
-If your compiler and codebase support C&plus;&plus;20 and/or C&plus;&plus;23, it is recommended to enable them in order to allow the library access to the latest features:
+If your compiler and codebase support C&plus;&plus;20 and/or C&plus;&plus;23, it is recommended to enable them in order to allow the thread pool library access to the latest features:
 
 * For Clang or GCC, use the `-std=c++20` or `-std=c++23` flag.
 * For MSVC, use `/std:c++20` for C&plus;&plus;20 or `/std:c++latest` for C&plus;&plus;23.
@@ -269,15 +270,19 @@ BS::thread_pool pool(12);
 
 Usually, when the thread pool is used, a program's main thread should only submit tasks to the thread pool and wait for them to finish, and should not perform any computationally intensive tasks on its own. If this is the case, it is recommended to use the default value for the number of threads. This ensures that all the threads available in the hardware will be put to work while the main thread waits.
 
-However, if the main thread also performs computationally intensive tasks, it may be beneficial to use one fewer thread than the hardware concurrency, leaving one hardware thread available for the main thread. Furthermore, if more than one thread pool is used in the program simultaneously, the total number of thread across all pools should not exceed the hardware concurrency.
+However, if the main thread also performs computationally intensive tasks, it may be beneficial to use one fewer thread than the hardware concurrency, leaving one hardware thread available for the main thread. Furthermore, if more than one thread pool is used in the program simultaneously, the total number of threads across all pools should not exceed the hardware concurrency.
+
+Note: If the [native extensions](#native-extensions) are enabled, a pool created with the default constructor will only use the number of threads available to the process, as obtained from [`BS::get_os_process_affinity()`](#setting-process-affinity), which can be less than the number of hardware threads.
 
 ### Getting and resetting the number of threads in the pool
 
-The member function `get_thread_count()` returns the number of threads in the pool. This will be equal to `std::thread::hardware_concurrency()` if the default constructor was used.
+The member function `get_thread_count()` returns the number of threads in the pool. This will be equal to `std::thread::hardware_concurrency()` if the default constructor was used (or to [`BS::get_os_process_affinity()`](#setting-process-affinity) if the [native extensions](#native-extensions) are enabled).
 
 It is generally unnecessary to change the number of threads in the pool after it has been created, since the whole point of a thread pool is that you only create the threads once. However, if needed, this can be done, safely and on-the-fly, using the `reset()` member function.
 
-`reset()` will wait for all currently running tasks to be completed, but will leave the rest of the tasks in the queue. Then it will destroy the thread pool and create a new one with the desired new number of threads, as specified in the function's argument (or the hardware concurrency if no argument is given). The new thread pool will then resume executing the tasks that remained in the queue and any newly submitted tasks.
+`reset()` will wait for all tasks to be completed, both those that are currently running in the threads and those that are still waiting in the queue. Then it will destroy the thread pool and create a new one with the desired new number of threads, as specified in the function's argument (if no argument is given, it behaves like the default constructor), with an empty task queue.
+
+If pausing is enabled ([see below](#pausing-the-pool)), `reset()` will only wait for tasks that are currently running before destroying the pool; once the pool is reset, it will then resume executing the tasks that remained in the queue and any newly submitted tasks. If the pool was paused before resetting it, the new pool will be paused as well. `reset()` can also be used to change the thread initialization function ([see below](#thread-initialization-functions)).
 
 The member function `get_thread_ids()` returns a vector containing the unique identifiers for each of the pool's threads, as obtained by `std::thread::get_id()`. These values are not so useful on their own, but can be used to identify and distinguish between threads, or for allocating resources.
 
@@ -313,7 +318,7 @@ int main()
 }
 ```
 
-In this example we submitted the function `the_answer()`, which returns an `int`. The member function `submit_task()` of the pool therefore returned an `std::future<int>`. We then used used the `get()` member function of the future to get the return value, and printed it out.
+In this example we submitted the function `the_answer()`, which returns an `int`. The member function `submit_task()` of the pool therefore returned an `std::future<int>`. We then used the `get()` member function of the future to get the return value, and printed it out.
 
 In addition to submitting a pre-defined function, we can also use a [lambda expression](https://en.cppreference.com/w/cpp/language/lambda) to quickly define the task on-the-fly. Rewriting the previous example in terms of a lambda expression, we get:
 
@@ -364,7 +369,7 @@ Here we split the lambda into multiple lines to make it more readable. The comma
 
 ### Submitting tasks with arguments and receiving a future
 
-As stated in the previous section, tasks submitted using `submit_task()` cannot have any arguments. However, it is easy to submit tasks with argument either by wrapping the function in a lambda or using lambda captures directly. The following is an example of submitting a pre-defined function with arguments by wrapping it in a lambda:
+As stated in the previous section, tasks submitted using `submit_task()` cannot have any arguments. However, it is easy to submit tasks with arguments either by wrapping the function in a lambda or using lambda captures directly. The following is an example of submitting a pre-defined function with arguments by wrapping it in a lambda:
 
 ```cpp
 #include "BS_thread_pool.hpp" // BS::thread_pool
@@ -545,7 +550,7 @@ Sorry, the task is not done yet.
 Task done!
 ```
 
-For detached tasks, since we do not have futures for them, we cannot use this method. However, `BS::thread_pool` has two member functions, also named `wait_for()` and `wait_until()`, which similarly wait for a specified duration or until a specified time point, but do so for **all** tasks (whether submitted or detached). Instead of an `std::future_status`, the thread pool's wait functions returns `true` if all tasks finished running, or `false` if the duration expired or the time point was reached but some tasks are still running.
+For detached tasks, since we do not have futures for them, we cannot use this method. However, `BS::thread_pool` has two member functions, also named `wait_for()` and `wait_until()`, which similarly wait for a specified duration or until a specified time point, but do so for **all** tasks (whether submitted or detached). Instead of an `std::future_status`, the thread pool's wait functions return `true` if all tasks finished running, or `false` if the duration expired or the time point was reached but some tasks are still running.
 
 Here is the same example as above, using `detach_task()` and `pool.wait_for()`:
 
@@ -715,7 +720,7 @@ where:
 * The loop is over the range `[start, end)`, i.e. inclusive of `start` but exclusive of `end`.
 * `loop()` is an operation performed for each loop index `i`, such as modifying an array with `end - start` elements.
 
-This loop may be automatically parallelized and submitted to the thread pool's queue using the member function `submit_loop()`, which has the follows syntax:
+This loop may be automatically parallelized and submitted to the thread pool's queue using the member function `submit_loop()`, which has the following syntax:
 
 ```cpp
 pool.submit_loop(start, end, loop, num_blocks);
@@ -1022,6 +1027,44 @@ However, `BS::multi_future<T>` also has additional member functions that are aim
 
 Aside from using `BS::multi_future<T>` to track the execution of parallelized loops, it can also be used, for example, whenever you have several different groups of tasks and you want to track the execution of each group individually.
 
+### Submitting tasks in bulk without a loop
+
+Sometimes, you may have a large number of tasks to submit to the thread pool, which are not part of a loop or sequence. In such cases, you can use `detach_bulk()` or `submit_bulk()` to submit all the tasks at once. As usual, `detach_bulk()` simply detaches the tasks, while `submit_bulk()` returns a `BS::multi_future`. The two functions can be used in one of two ways:
+
+1. By passing a container of callable objects. They must have no arguments; to submit functions with arguments, enclose them in lambda expressions. In the case of `submit_bulk()`, the callables may have return values, which will be stored in the returned `BS::multi_future`, but they must all return the same type.
+2. By passing an iterator range, similarly to the standard library algorithms. This can be used, for example, to submit only a subset of tasks from a larger container.
+
+The following example demonstrates how to use `submit_bulk()` with a container:
+
+```cpp
+#include "BS_thread_pool.hpp" // BS::multi_future, BS::thread_pool
+#include <functional>         // std::function
+#include <iostream>           // std::cout
+#include <string>             // std::string
+#include <vector>             // std::vector
+
+int main()
+{
+    BS::thread_pool pool;
+    std::vector<std::function<std::string()>> tasks;
+    tasks.emplace_back([]
+        {
+            return "Do something.";
+        });
+    tasks.emplace_back([]
+        {
+            return "Do something else.";
+        });
+    tasks.emplace_back([]
+        {
+            return "Do another thing.";
+        });
+    BS::multi_future<std::string> results = pool.submit_bulk(tasks);
+    for (const std::string& result : results.get())
+        std::cout << result << '\n';
+}
+```
+
 ## Utility classes
 
 ### Synchronizing printing to a stream with `BS::synced_stream`
@@ -1150,7 +1193,7 @@ int main()
 
 Note that we must wait on the future before the `main()` function ends, as otherwise the log file may be destructed before the tasks finish executing. If we used `detach_sequence()`, which does not return a future, we would have to call `pool.wait()` in the last line.
 
-In this example we did not create the `BS::synced_stream` as a global object, since we wanted to pass the log file as a stream to the constructor. However, it is also possible to add streams to or remove streams from an existing `BS::synced_stream` object using the member functions `add_stream()` and `remove_stream()`. For example, in the following program, we create a `BS::synced_stream` global object with the default constructor, so that it prints to `std::cout`, but then we change out minds, remove `std::cout` from the list of streams, and add a log file instead:
+In this example we did not create the `BS::synced_stream` as a global object, since we wanted to pass the log file as a stream to the constructor. However, it is also possible to add streams to or remove streams from an existing `BS::synced_stream` object using the member functions `add_stream()` and `remove_stream()`. For example, in the following program, we create a `BS::synced_stream` global object with the default constructor, so that it prints to `std::cout`, but then we change our minds, remove `std::cout` from the list of streams, and add a log file instead:
 
 ```cpp
 #include "BS_thread_pool.hpp" // BS::synced_stream, BS::thread_pool
@@ -1177,12 +1220,6 @@ int main()
 It is common practice to create a global `BS::synced_stream` object, so that it can be accessed from anywhere in the program, without having to pass it to every function that might want to print something to the stream. However, if you also have a global `BS::thread_pool` object, you must always make sure to define the global `BS::synced_stream` object **before** the global `BS::thread_pool` object, for the reasons explained in the warning above.
 
 Internally, `BS::synced_stream` keeps the streams in an `std::vector<std::ostream*>`. The order in which the streams are added is also the order in which they will be printed to. For more precise control, you can use the member function `get_streams()` to get a reference to this vector, and manipulate it directly as you see fit.
-
-### Synchronizing tasks with `BS::counting_semaphore` and `BS::binary_semaphore`
-
-The thread pool library provides two utility classes, `BS::counting_semaphore` and `BS::binary_semaphore`, which offer versatile synchronization primitives that can be used to synchronize tasks in a variety of ways. These classes are equivalent to the C&plus;&plus;20 `std::counting_semaphore` and `std::binary_semaphore`, respectively, but are offered in the library as convenience polyfills for projects based on C&plus;&plus;17. If C&plus;&plus;20 features are available, the polyfills are not used, and instead are just aliases for the standard library classes.
-
-Since `BS::counting_semaphore` and `BS::binary_semaphore` are identical in functionality to their standard library counterparts, we will not explain how to use them here. Instead, the user is referred to [cppreference.com](https://en.cppreference.com/w/cpp/thread/counting_semaphore).
 
 ## Managing tasks
 
@@ -1285,7 +1322,7 @@ int main()
 }
 ```
 
-The program submit 8 tasks to the queue. Each task waits 100 milliseconds and then prints a message. The thread pool has 4 threads, so it will execute the first 4 tasks in parallel, and then the remaining 4. We wait 50 milliseconds, to ensure that the first 4 tasks have all started running. Then we call `purge()` to purge the remaining 4 tasks. As a result, these tasks never get executed. However, since the first 4 tasks are still running when `purge()` is called, they will finish uninterrupted; `purge()` only discards tasks that have not yet started running. The output of the program therefore only contains the messages from the first 4 tasks:
+The program submits 8 tasks to the queue. Each task waits 100 milliseconds and then prints a message. The thread pool has 4 threads, so it will execute the first 4 tasks in parallel, and then the remaining 4. We wait 50 milliseconds, to ensure that the first 4 tasks have all started running. Then we call `purge()` to purge the remaining 4 tasks. As a result, these tasks never get executed. However, since the first 4 tasks are still running when `purge()` is called, they will finish uninterrupted; `purge()` only discards tasks that have not yet started running. The output of the program therefore only contains the messages from the first 4 tasks:
 
 ```none
 Task 0 done.
@@ -1591,7 +1628,7 @@ In this example, we create a `thread_local` Mersenne twister engine, meaning tha
 
 Note that the lambda function we passed to `submit_sequence()` has the signature `[](int)`, with an unnamed `int` argument, as it does not make use of the sequence index, which will be a number in the range `[0, 4)`. This is an easy way to simply submit the same task multiple times.
 
-**Warning:** Exceptions thrown by thread initialization functions must not throw any exceptions, as that will result in program termination. Any exceptions must be handled explicitly within the function.
+**Warning:** Thread initialization functions must not throw any exceptions, as that will result in program termination. Any exceptions must be handled explicitly within the function.
 
 ### Thread cleanup functions
 
@@ -1635,7 +1672,7 @@ In this example, we create 4 threads, each of which has a separate thread-local 
 
 We submit 40 tasks to the queue using `submit_sequence()`, each of which prints a message to the log file indicating which thread it is running on. When the `main()` function exits and `pool` is destroyed, the cleanup function is called for each thread, ensuring that the log files are closed properly.
 
-**Warning:** As with initialization functions, exceptions thrown by thread cleanup functions must not throw any exceptions, as that will result in program termination. Any exceptions must be handled explicitly within the function.
+**Warning:** As with initialization functions, thread cleanup functions must not throw any exceptions, as that will result in program termination. Any exceptions must be handled explicitly within the function.
 
 ### Passing task arguments by constant reference
 
@@ -1686,7 +1723,7 @@ Generally, it is not really necessary to pass arguments by constant reference, b
 
 ### Enabling features
 
-The thread pool has some optional features, which are disabled by default to minimize overhead. They can be enabled by passing the appropriate template parameter to the `BS::thread_pool` class when creating the pool. The template parameter is a bitmask, so you can enable several features at once by combining them with the bitwise OR operator `|`. The bitmask flags are members of the `BS::tp` enumeration:
+The thread pool has some optional features, which are disabled by default to minimize overhead. They can be enabled by passing the appropriate template parameter to the `BS::thread_pool` class when creating the pool. The template parameter is a bitmask, so you can enable several features at once by combining them with the bitwise OR operator `|`. The bitmask flags are members of the `BS::tp` enumeration class:
 
 * `BS::tp::priority` enables [task priority](#setting-task-priority).
 * `BS::tp::pause` enables [pausing the pool](#pausing-the-pool).
@@ -1714,7 +1751,7 @@ Note that, since optional features are enabled separately for each `BS::thread_p
 
 Turning on the `BS::tp::priority` flag in the template parameter to `BS::thread_pool` enables task priority. In addition, the library defines the convenience alias `BS::priority_thread_pool`, which is equivalent to `BS::thread_pool<BS::tp::priority>`. When this feature is enabled, the static member `priority_enabled` will be set to `true`.
 
-The priority of a task or group of tasks may then be specified as an additional argument (at the end of the argument list) to `detach_task()`, `submit_task()`, `detach_blocks()`, `submit_blocks()`, `detach_loop()`, `submit_loop()`, `detach_sequence()`, and `submit_sequence()`. If the priority is not specified, the default value will be 0.
+The priority of a task or group of tasks may then be specified as an additional argument (at the end of the argument list) to `detach_task()`, `submit_task()`, `detach_blocks()`, `submit_blocks()`, `detach_loop()`, `submit_loop()`, `detach_sequence()`, `submit_sequence()`, `detach_bulk()`, and `submit_bulk()`. If the priority is not specified, the default value will be 0.
 
 The priority is a number of type `BS::priority_t`, which is a signed 8-bit integer, so it can have any value between -128 and +127. The tasks will be executed in priority order from highest to lowest. If priority is assigned to the block/loop/sequence parallelization functions, which submit multiple tasks, then all of these tasks will have the same priority.
 
@@ -1777,7 +1814,7 @@ Lastly, please note that when using the priority queue, tasks will not necessari
 
 Turning on the `BS::tp::pause` flag in the template parameter to `BS::thread_pool` enables pausing the pool. In addition, the library defines the convenience alias `BS::pause_thread_pool`, which is equivalent to `BS::thread_pool<BS::tp::pause>`. When this feature is enabled, the static member `pause_enabled` will be set to `true`.
 
-This feature enables the member functions `pause()`, `unpause()`, and `is_paused()`. When you call `pause()`, the workers will temporarily stop retrieving new tasks out of the queue. However, any tasks already executed will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume retrieving tasks, call `unpause()`. To check whether the pool is currently paused, call `is_paused()`.
+This feature enables the member functions `pause()`, `unpause()`, and `is_paused()`. When you call `pause()`, the workers will temporarily stop retrieving new tasks out of the queue. However, any tasks already executing will keep running until they are done, since the thread pool has no control over the internal code of your tasks. If you need to pause a task in the middle of its execution, you must do that manually by programming your own pause mechanism into the task itself. To resume retrieving tasks, call `unpause()`. To check whether the pool is currently paused, call `is_paused()`.
 
 Here is an example:
 
@@ -2000,7 +2037,7 @@ Wait deadlock checks are disabled by default because wait deadlocks are not some
 
 ### Enabling the native extensions
 
-While portability is one of the guiding principle for developing this library, non-portable features such as setting the thread priority using the operating system's native API can be very useful. Therefore, the library includes native extensions - which are disabled by default, as they are not portable.
+While portability is one of the guiding principle for developing this library, non-portable features such as setting the thread priority using the operating system's native API can be very useful. Therefore, the library includes native extensions - which are disabled by default, as they are not portable. (Note that as long as the native extensions are disabled, the library is 100% standard C&plus;&plus;.)
 
 The native extensions may be enabled by defining the macro `BS_THREAD_POOL_NATIVE_EXTENSIONS` at compilation time. If including the library as a header file, the macro must be defined before `#include "BS_thread_pool.hpp"`. Note that even if the macro is defined, the native extensions are disabled automatically if a supported operating system (Windows, Linux, or macOS) is not detected.
 
@@ -2010,7 +2047,7 @@ If importing the library [as a C&plus;&plus;20 module](#importing-the-library-as
 
 The `constexpr` flag `BS::thread_pool_native_extensions` indicates whether the thread pool library was compiled with native extensions enabled. Note that the flag will be `false` if `BS_THREAD_POOL_NATIVE_EXTENSIONS` is defined but the operating system is unsupported.
 
-**Warning:** Please note that, as of v5.0.0 of the thread pool library, the native extensions have only been tested on **Windows 11 23H2, Ubuntu 24.10, and macOS 15.1**. They have not been tested on older versions of these operating systems, other Linux distributions, or any other operating systems, and are therefore not guaranteed to work on every system. If you encounter any issues, please report them on [the GitHub repository](https://github.com/bshoshany/thread-pool).
+**Warning:** Please note that the native extensions have only been tested on the operating systems listed above under [compiling and compatibility](#compiling-and-compatibility). They have not been tested on older versions of these operating systems, other Linux distributions, or any other operating systems, and are therefore not guaranteed to work on every system. If you encounter any issues, please report them on [the GitHub repository](https://github.com/bshoshany/thread-pool).
 
 ### Setting thread priority
 
@@ -2085,12 +2122,12 @@ The thread pool's native extensions allow the user to set a thread's processor a
 
 This can be useful for performance optimization, as it can reduce cache misses. However, it can also degrade performance, sometimes severely, since the thread will not run at all until its assigned cores are available. Therefore, it is usually better to let the operating system's scheduler manage thread affinities on its own, except in very specific cases.
 
-Please note that setting thread affinity works on Windows and Linux, but not on macOS, as the native API does not allow it. As affinity is handled differently on different operating systems, the thread pool library provides an abstraction layer over the native APIs. In this abstraction layer, affinity is controlled using an `std::vector<bool>` where each element corresponds to a logical processor.
+Please note that setting thread affinity works on Windows and Linux, but not on macOS and Android, as the native API does not allow it. As affinity is handled differently on different operating systems, the thread pool library provides an abstraction layer over the native APIs. In this abstraction layer, affinity is controlled using an `std::vector<bool>` where each element corresponds to a logical processor.
 
 Thread affinity is managed using two static member functions of the `BS::this_thread` class:
 
-* `BS::this_thread::get_os_thread_affinity()` gets the current thread's affinity. It returns an object of type `std::optional<std::vector<bool>>`. If the returned object does not contain a value, then the affinity could not be determined. On macOS, this function always returns `std::nullopt`.
-* `BS::this_thread::set_os_thread_affinity()` sets the current thread's affinity. It returns `true` if the affinity was set successfully, or `false` otherwise. On macOS, this function always returns `false`.
+* `BS::this_thread::get_os_thread_affinity()` gets the current thread's affinity. It returns an object of type `std::optional<std::vector<bool>>`. If the returned object does not contain a value, then the affinity could not be determined. On macOS and Android, this function always returns `std::nullopt`.
+* `BS::this_thread::set_os_thread_affinity()` sets the current thread's affinity. It returns `true` if the affinity was set successfully, or `false` otherwise. On macOS and Android, this function always returns `false`.
 
 Note that the thread affinity must be a subset of the process affinity (as obtained using [`BS::get_os_process_affinity()`](#setting-process-affinity)) for the containing process of a thread.
 
@@ -2258,8 +2295,51 @@ The thread pool's native extensions also allow the user to set the entire proces
 
 Process affinity is managed using two functions:
 
-* `BS::this_thread::get_os_process_affinity()` gets the process's affinity. It returns an object of type `std::optional<std::vector<bool>>`. If the returned object does not contain a value, then the affinity could not be determined. On macOS, this function always returns `std::nullopt`.
-* `BS::this_thread::set_os_process_affinity()` sets the process's affinity. It returns `true` if the affinity was set successfully, or `false` otherwise. On macOS, this function always returns `false`.
+* `BS::get_os_process_affinity()` gets the process's affinity. It returns an object of type `std::optional<std::vector<bool>>`. If the returned object does not contain a value, then the affinity could not be determined. On macOS, this function always returns `std::nullopt`.
+* `BS::set_os_process_affinity()` sets the process's affinity. It returns `true` if the affinity was set successfully, or `false` otherwise. On macOS, this function always returns `false`.
+
+Note that by counting the number of elements set to `true` in `BS::get_os_process_affinity()`, you can determine how many logical processors are available to the process. If the native extensions are enabled, a pool created with the default constructor will use this method to determine the number of threads available to the process, which can be less than the number of hardware threads, and use this as the default number of pool threads. This is demonstrated by the following program:
+
+```cpp
+#define BS_THREAD_POOL_NATIVE_EXTENSIONS
+#include "BS_thread_pool.hpp" // BS::get_os_process_affinity(), BS::set_os_process_affinity, BS::synced_stream, BS::thread_pool
+#include <algorithm>          // std::count
+#include <optional>           // std::optional
+#include <thread>             // std::thread
+#include <vector>             // std::vector
+
+BS::synced_stream sync_out;
+
+int main()
+{
+    sync_out.println("Total hardware threads: ", std::thread::hardware_concurrency());
+    BS::thread_pool pool1;
+    sync_out.println("Threads in first pool: ", pool1.get_thread_count());
+
+    const bool success = BS::set_os_process_affinity({true, true, true});
+    if (success)
+    {
+        const std::optional<std::vector<bool>> affinity = BS::get_os_process_affinity();
+        if (affinity)
+        {
+            sync_out.println("Total threads now available to the process: ", std::count(affinity->begin(), affinity->end(), true));
+            BS::thread_pool pool2;
+            sync_out.println("Threads in second pool: ", pool2.get_thread_count());
+            return 0;
+        }
+    }
+    sync_out.println("ERROR: Failed to set or get process affinity.");
+}
+```
+
+Assuming that the program was executed without setting the affinity of the process beforehand (e.g. using `taskset` on Linux), `pool1` will be created with the total number of hardware threads. However, we then manually set the affinity of the process so that only the first 3 logical processors are enabled (by passing a vector with 3 `true` elements and all other elements `false`). Therefore, `pool2` will be created with only 3 threads. If, for example, 32 hardware threads are available in total, the output will be:
+
+```none
+Total hardware threads: 32
+Threads in first pool: 32
+Total threads now available to the process: 3
+Threads in second pool: 3
+```
 
 ### Accessing native thread handles
 
@@ -2308,24 +2388,26 @@ The test program also takes the following command line arguments:
 * `log`: Print to a log file. It will have the same name as the executable, with a suffix `-yyyy-mm-dd_hh.mm.ss.log` based on the current date and time.
 * `tests`: Perform standard tests.
 * `deadlock`: Perform long deadlock tests.
-* `benchmarks`: Perform full Mandelbrot plot benchmarks.
-* `plot`: Perform quick Mandelbrot plot benchmarks.
-* `save`: Save the Mandelbrot plot to a file.
+* `benchmarks`: Perform full Mandelbrot set benchmarks.
+* `plot`: Perform quick Mandelbrot set benchmarks.
+* `save`: Save the Mandelbrot set image to a file.
 
-If no options are entered, the default is `benchmarks log stdout tests`. If the file `default_args.txt` exists in the same folder, the test program reads the default arguments from it (space separated in a single line). Command line arguments can still override these defaults. This is useful when debugging.
+If no options are entered, the default is `benchmarks log stdout tests`. If the file `default_args.txt` exists in the same folder or the parent folder, the test program reads the default arguments from it (space separated in a single line). Command line arguments can still override these defaults. This is useful when debugging.
 
 The following macros can be defined during compilation (using the `-D` flag in Clang and GCC or `/D` in MSVC) to enable additional features:
 
 * `BS_THREAD_POOL_TEST_IMPORT_MODULE`: Import the thread pool library [as a C&plus;&plus;20 module](#importing-the-library-as-a-c20-module). Note that the module must be compiled beforehand, as explained in the relevant section.
 * `BS_THREAD_POOL_NATIVE_EXTENSIONS`: Test the [native extensions](#native-extensions). If importing the library as a C&plus;&plus;20 module, ensure that the library was compiled with the same macro.
 
-A Python script, `test_all.py`, is provided for convenience in the `scripts` folder. This script makes use of the bundled [`compile_cpp.py` script](#the-compile_cpppy-script), and requires Python 3.12 or later. The script will automatically detect if Clang, GCC, and/or MSVC are available, and compile and run the test program using each available compiler 3 times:
+The bundled [`compile_cpp.py` script](#the-compile_cpppy-script), if run with `python scripts/compile_cpp.py tests/BS_thread_pool_test.cpp --run --try-all --type=release --verbose`, will automatically detect if Clang, GCC, and/or MSVC are available, and compile and run the test program using each available compiler 3 times:
 
 1. With C&plus;&plus;17 support.
 2. With C&plus;&plus;20 support, using `import BS.thread_pool`.
-3. With C&plus;&plus;23 support, using `import BS.thread_pool`, and using `import std` on supported compilers.
+3. With C&plus;&plus;23 support, using `import BS.thread_pool`, and using `import std`.
 
-If any of the tests fail, please [submit a bug report](https://github.com/bshoshany/thread-pool/issues) including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file. However, please note that only the latest versions of each compiler are supported.
+If any of the tests fail, please [submit a bug report](https://github.com/bshoshany/thread-pool/issues) including the exact specifications of your system (OS, CPU, compiler, etc.) and the generated log file. However, please note that **only the latest versions of each compiler are supported**.
+
+By default, the test program prints colored output using ANSI escape codes for better readability. This can be disabled by setting the `NO_COLOR` environment variable.
 
 ### Performance tests
 
@@ -2335,7 +2417,9 @@ These benchmarks are heavily CPU-intensive, which results in a high speedup fact
 
 The full benchmarks are enabled using the command line argument `benchmarks`, which is enabled by default. The command line argument `plot` can be used to just plot the Mandelbrot set once, either instead of or in addition to doing the full benchmarks. This will plot the largest possible image that can be plotted in 5 seconds, and only measure the performance in pixels/ms for the entire plot.
 
-If you want to see the actual plot, pass the `save` command line argument. The plot is saved to a BMP file, to avoid having to depend on 3rd-party libraries. This is off by default, since that file can get quite large.
+The test program prints out the Mandelbrot set it generates, downsampled to fit in a terminal window (at 120 character width). This will be in 24-bit color in the terminal, and in monochrome using Unicode blocks in the log file. If the `NO_COLOR` environment variable is set, the terminal output will also be in monochrome. (Note: On Windows Terminal, ensure that `adjustIndistinguishableColors` is disabled in the settings, otherwise the plot will not be displayed correctly.)
+
+If you want to see the plot in full resolution, pass the `save` command line argument, and the plot will be saved to `BS_thread_pool_benchmark_mandelbrot.bmp` (it's a BMP file to avoid having to depend on 3rd-party libraries). This is off by default, since that file can get quite large.
 
 The program determines the optimal resolution of the Mandelbrot plot by testing how many pixels are needed to reach a certain target duration when parallelizing the loop using a number of tasks equal to the number of threads. This ensures that the benchmarks take approximately the same amount of time (per thread) on all systems, and are thus more consistent and portable.
 
@@ -2348,40 +2432,40 @@ If the [native extensions](#native-extensions) are enabled, the program will try
 As an example, here are the results of the benchmarks running on a 24-core (8P+16E) / 32-thread Intel i9-13900K CPU. The tests were compiled using MSVC in C&plus;&plus;23 mode, to obtain maximum performance using the latest C&plus;&plus;23 features. Compiler optimizations were enabled using the `/O2` flag. The benchmarks were run 5 times, and the result with the median speedup was as follows:
 
 ```none
-Generating a 3965x3965 plot of the Mandelbrot set...
+Generating a 3927x3927 plot of the Mandelbrot set...
 Each test will be repeated 30 times to collect reliable statistics.
    1 task:  [..............................]  (single-threaded)
--> Mean:  510.5 ms, standard deviation:  0.5 ms, speed:  1026.5 pixels/ms.
+-> Mean:  500.8 ms, standard deviation:  1.3 ms, speed:  1026.5 pixels/ms.
    8 tasks: [..............................]
--> Mean:  149.1 ms, standard deviation:  0.6 ms, speed:  3514.7 pixels/ms.
+-> Mean:  146.0 ms, standard deviation:  0.3 ms, speed:  3520.9 pixels/ms.
   16 tasks: [..............................]
--> Mean:   85.4 ms, standard deviation:  2.5 ms, speed:  6133.9 pixels/ms.
+-> Mean:   82.2 ms, standard deviation:  1.5 ms, speed:  6256.1 pixels/ms.
   32 tasks: [..............................]
--> Mean:   48.3 ms, standard deviation:  1.8 ms, speed: 10849.7 pixels/ms.
+-> Mean:   49.8 ms, standard deviation:  1.2 ms, speed: 10322.2 pixels/ms.
   64 tasks: [..............................]
--> Mean:   29.1 ms, standard deviation:  1.0 ms, speed: 17987.7 pixels/ms.
+-> Mean:   26.9 ms, standard deviation:  1.2 ms, speed: 19109.5 pixels/ms.
  128 tasks: [..............................]
--> Mean:   23.6 ms, standard deviation:  0.7 ms, speed: 22173.8 pixels/ms.
+-> Mean:   22.8 ms, standard deviation:  0.9 ms, speed: 22545.8 pixels/ms.
  256 tasks: [..............................]
--> Mean:   22.5 ms, standard deviation:  0.6 ms, speed: 23325.3 pixels/ms.
+-> Mean:   21.4 ms, standard deviation:  0.5 ms, speed: 24058.2 pixels/ms.
  512 tasks: [..............................]
--> Mean:   21.8 ms, standard deviation:  0.5 ms, speed: 24075.4 pixels/ms.
+-> Mean:   20.7 ms, standard deviation:  0.6 ms, speed: 24833.1 pixels/ms.
 1024 tasks: [..............................]
--> Mean:   21.9 ms, standard deviation:  0.7 ms, speed: 23892.4 pixels/ms.
-Maximum speedup obtained by multithreading vs. single-threading: 23.5x, using 512 tasks.
+-> Mean:   21.0 ms, standard deviation:  0.4 ms, speed: 24478.3 pixels/ms.
+Maximum speedup obtained by multithreading vs. single-threading: 24.2x, using 512 tasks.
 ```
 
 This CPU has 24 cores, of which 8 are fast (5.40 GHz max) performance cores with hyperthreading (thus providing 16 threads in total), and 16 are slower (4.30 GHz max) efficiency cores without hyperthreading, for a total of 32 threads.
 
 Due to the hybrid architecture, it is not trivial to calculate the theoretical maximum speedup. However, we can get a rough estimate by noticing that the E-cores are about 20% slower than the P-cores, and that hyperthreading is generally known to provide around a 30% speedup. Thus, the estimated theoretical speedup (compared to a single P-core) is 8 &times; 1.3 + 16 &times; 0.8 = 23.2x.
 
-The actual median speedup obtained, 23.5x, is slightly above this estimate, which indicates that the thread pool provides optimal performance and allows the Mandelbrot plot algorithm to take full advantage of the CPU's capabilities.
+The actual median speedup obtained, 24.2x, is 4.3% above this estimate, which indicates that the thread pool provides optimal performance and allows the Mandelbrot plot algorithm to take full advantage of the CPU's capabilities.
 
 It should also be noted that even though the available number of hardware threads is 32, the maximum possible speedup is achieved not with 32 tasks, but with 512 tasks - half the square of the number of hardware threads. The reason for this is that splitting the job into more tasks than threads eliminates thread idle time, as explained [above](#optimizing-the-number-of-blocks). However, at 1024 tasks we encounter diminishing returns, as the overhead of submitting the tasks to the pool starts to outweigh the benefits of parallelization.
 
 ### Finding the version of the library
 
-Starting with v5.0.0, the thread pool library defines the `constexpr` object `BS::thread_pool_version`, which can be used to check the version of the library at compilation time. This object is of type `BS::version`, with members `major`, `minor`, and `patch`, and all comparison operators defined as `constexpr`. It also has a `to_string()` member function and an `operator<<` overload for easy printing at runtime.
+Starting with v5.0.0, the thread pool library defines the `constexpr` object `BS::thread_pool_version`, which can be used to check the version of the library at compilation time. This object is of type `BS::version`, with members `major`, `minor`, and `patch`, and all comparison operators defined as `constexpr`. It also has a `to_string()` member function and an `operator<<` overload for easy printing at runtime (used by the [test program](#testing-the-library)).
 
 Since `BS::thread_pool_version` is a `constexpr` object, it can be used in any context where a `constexpr` object is allowed, such as `static_assert()` and `if constexpr`. For example, the following program will fail to compile if the version is not 5.1.0 or higher:
 
@@ -2418,9 +2502,7 @@ int main()
 }
 ```
 
-Currently, both the examples above are of pedagogical value only, because `BS::thread_pool_version` was only introduced in v5.0.0, and that is also the latest version at the time of writing, so there are no other versions to compare to. However, once future versions of the library are released, this object will be the preferred way to do version checking.
-
-For backwards compatibility, if you are not sure if you are going to get v4 or v5 of the library, you can check the version using the following preprocessor macros, which were introduced in v4.0.1:
+`BS::thread_pool_version` was introduced in v5.0.0, and it is the preferred way to do version checking. However, for backwards compatibility, if you are not sure if you are going to get v4 or v5 of the library, you can check the version using the following preprocessor macros, which were introduced in v4.0.1:
 
 * `BS_THREAD_POOL_VERSION_MAJOR` - indicates the major version.
 * `BS_THREAD_POOL_VERSION_MINOR` - indicates the minor version.
@@ -2495,7 +2577,7 @@ Below we will provide the commands for compiling the library as a module and the
 │   └── BS_thread_pool.hpp        <- the header file
 ├── modules
 │   └── BS.thread_pool.cppm       <- the module file
-├── tasks
+├── scripts
 │   └── compile_cpp.py            <- the compile script (optional)
 └── tests
     └── BS_thread_pool_test.cpp   <- the test program
@@ -2519,11 +2601,11 @@ Since we used `-t=release`, optimization flags will be added automatically. If y
 Thread pool library imported using: import BS.thread_pool (C++20 modules).
 ```
 
-For further customization, it is recommend to create a `compile_cpp.yaml` file as explained [below](#the-compile_cpppy-script).
+For further customization, it is recommended to create a `compile_cpp.yaml` file as explained [below](#the-compile_cpppy-script).
 
 ### Compiling with Clang using `import BS.thread_pool`
 
-Note: The following instructions have only been tested using Clang v19.1.6, the latest version at the time of writing, and may not work with older versions of the compiler.
+Note: The following instructions have only been tested using Clang v21.1.8, the latest version at the time of writing, and may not work with older versions of the compiler.
 
 To compile the module file `BS.thread_pool.cppm` with Clang, first create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
@@ -2563,16 +2645,18 @@ Thread pool library imported using: import BS.thread_pool (C++20 modules).
 
 Of course, you should add warning, debugging, optimization, and other compiler flags to the commands above as needed. For more information about using C&plus;&plus;20 modules with Clang, please see [the official documentation](https://clang.llvm.org/docs/StandardCPlusPlusModules.html).
 
-**Note:** On macOS, Apple Clang v16.0.0 (the latest version at the time of writing) does not support C&plus;&plus;20 modules. Please either install the latest version of LLVM Clang using [Homebrew](https://formulae.brew.sh/formula/llvm), or include the library as a header file.
+**Note:** At the time of writing, there is a bug in Clang with libc++ where using `std::jthread` in a C++20 module causes a compilation error. As a workaround, until the bug is fixed, the thread pool library automatically falls back to `std::thread` if it detects that Clang and libc++ are being used together with C++20 modules. This workaround can be disabled by defining `BS_THREAD_POOL_DISABLE_WORKAROUNDS` when compiling the module.
+
+**Note:** On macOS, Apple Clang does not support C&plus;&plus;20 modules. Please either install the latest version of LLVM Clang using [Homebrew](https://formulae.brew.sh/formula/llvm), or include the library as a header file.
 
 ### Compiling with GCC using `import BS.thread_pool`
 
-Note: The following instructions have only been tested using GCC v14.2.0, the latest version at the time of writing, and may not work with older versions of the compiler.
+Note: The following instructions have only been tested using GCC v15.2.0, the latest version at the time of writing, and may not work with older versions of the compiler.
 
 To compile the module file `BS.thread_pool.cppm` with GCC, first create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
 ```bash
-g++ -x c++ modules/BS.thread_pool.cppm -c "-fmodule-mapper=|@g++-mapper-server -r build" -fmodule-only -fmodules-ts -std=c++20 -I include
+g++ -x c++ modules/BS.thread_pool.cppm -c "-fmodule-mapper=|@g++-mapper-server -r build" -fmodule-only -fmodules -std=c++20 -I include
 ```
 
 Here is a breakdown of the compiler arguments:
@@ -2582,7 +2666,7 @@ Here is a breakdown of the compiler arguments:
 * `-c`: Do not run the linker, only compile the module.
 * `"-fmodule-mapper=|@g++-mapper-server -r build"`: Specify to the module mapper that the compiled module should be placed in the `build` folder. This will create a file `build/BS.thread_pool.gcm`. The extension `.gcm` is used by GCC for compiled modules.
 * `-fmodule-only`: Do not create an object file for the module.
-* `-fmodules-ts`: Enable C&plus;&plus;20 modules.
+* `-fmodules`: Enable C&plus;&plus;20 modules.
 * `-std=c++20`: Use the C&plus;&plus;20 standard. For C&plus;&plus;23, use `-std=c++23`.
 * `-I include`: Add the `include` folder to the include path, so that the module can find the header file `BS_thread_pool.hpp`.
 
@@ -2591,14 +2675,14 @@ Note that to enable the [native extensions](#native-extensions), you should add 
 Once the module is compiled, you can compile the test program as follows:
 
 ```bash
-g++ tests/BS_thread_pool_test.cpp "-fmodule-mapper=|@g++-mapper-server -r build" -fmodules-ts -std=c++20 -o build/BS_thread_pool_test -D BS_THREAD_POOL_TEST_IMPORT_MODULE
+g++ tests/BS_thread_pool_test.cpp "-fmodule-mapper=|@g++-mapper-server -r build" -fmodules -std=c++20 -o build/BS_thread_pool_test -D BS_THREAD_POOL_TEST_IMPORT_MODULE
 ```
 
 Here is a breakdown of the compiler arguments:
 
 * `tests/BS_thread_pool_test.cpp`: The program to compile.
 * `"-fmodule-mapper=|@g++-mapper-server -r build"`: Specify to the module mapper that the compiled module can be found in the `build` folder. It will look for the file `build/BS.thread_pool.gcm`.
-* `-fmodules-ts`, `-std=c++20`: Same as above.
+* `-fmodules`, `-std=c++20`: Same as above.
 * `-o build/BS_thread_pool_test`: Output the compiled program to `build/BS_thread_pool_test` (or `build/BS_thread_pool_test.exe` on Windows).
 * `-D BS_THREAD_POOL_TEST_IMPORT_MODULE`: Define the macro `BS_THREAD_POOL_TEST_IMPORT_MODULE`, which is used to indicate to the test program that it needs to import the library as a module instead of including the header file. **Note that this macro is only used by the test program; it is not needed when you compile your own programs.**
 
@@ -2610,21 +2694,19 @@ Thread pool library imported using: import BS.thread_pool (C++20 modules).
 
 Of course, you should add warning, debugging, optimization, and other compiler flags to the commands above as needed. For more information about using C&plus;&plus;20 modules with GCC, please see [the official documentation](https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Modules.html).
 
-**Note:** GCC v14.2.0 (latest version at the time of writing) appears to have an internal compiler error when compiling programs containing modules (or at least, this particular module) with any optimization flags other than `-Og` enabled. Until this is fixed, if you wish to use compiler optimizations, please either include the library as a header file or use a different compiler.
-
 ### Compiling with MSVC using `import BS.thread_pool`
 
-Note: The following instructions have only been tested using MSVC v19.42.34435, the latest version at the time of writing, and may not work with older versions of the compiler.
+Note: The following instructions have only been tested using MSVC v19.50.35721, the latest version at the time of writing, and may not work with older versions of the compiler.
 
-To compile the module file `BS.thread_pool.cppm` with MSVC, first open the Visual Studio Developer PowerShell for the appropriate CPU architecture. For example, for x64, execute the following command in PowerShell:
+To compile the module file `BS.thread_pool.cppm` with MSVC, first open the Visual Studio Developer PowerShell for the appropriate CPU architecture. For example, on Visual Studio 2026, for x64 architecture, execute the following command in PowerShell in the root folder of the repository:
 
 ```pwsh
-& 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
+& 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
 ```
 
-For ARM64, replace `amd64` with `arm64`. (Do not use the "Developer PowerShell for VS 2022" Start Menu shortcut, as it may not use the correct CPU architecture by default.)
+For ARM64, replace `amd64` with `arm64`. (Do not use the "Developer PowerShell for VS" Start Menu shortcut, as it may not use the correct CPU architecture by default.)
 
-Navigate to the repository folder, create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
+Create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
 ```pwsh
 cl modules/BS.thread_pool.cppm /c /EHsc /interface /nologo /permissive- /std:c++20 /TP /Zc:__cplusplus /I include /ifcOutput build/BS.thread_pool.ifc /Fo:build/BS.thread_pool.obj
@@ -2673,12 +2755,12 @@ Of course, you should add warning, debugging, optimization, and other compiler f
 
 ### Compiling with CMake using `import BS.thread_pool`
 
-Note: The following instructions have only been tested using CMake v3.31.2, the latest version at the time of writing, and may not work with older versions. Also, modules are currently only supported by CMake with the [`Ninja`](https://ninja-build.org/) and `Visual Studio 17 2022` generators.
+Note: The following instructions have only been tested using CMake v4.2.1, the latest version at the time of writing, and may not work with older versions. Also, modules are currently not supported by CMake with all generators; please see the CMake documentation for more information.
 
 If you are using [CMake](https://cmake.org/), you can use `target_sources()` with `CXX_MODULES` to include the module file `BS.thread_pool.cppm`. CMake will then automatically compile the module and link it to your program. Here is an example of a `CMakeLists.txt` file that can be used to build the test program and import the thread pool library as a module:
 
 ```cmake
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.2.1)
 project(BS_thread_pool_test LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -2727,10 +2809,9 @@ If C&plus;&plus;23 features are available, the thread pool library can import th
 
 At the time of writing, importing the C&plus;&plus; Standard Library as a module is only officially supported by the following combinations of compilers and standard libraries:
 
-* Recent versions of MSVC with Microsoft STL.
 * Recent versions of LLVM Clang (**not** Apple Clang) with LLVM libc&plus;&plus;.
-
-It is not supported by GCC with any standard library, Clang with any standard library other than libc&plus;&plus;, any compiler with GNU libstdc&plus;&plus;, or any other compiler or standard library.
+* Recent versions of GCC with libstdc&plus;&plus;.
+* Recent versions of MSVC with Microsoft STL.
 
 If `BS_THREAD_POOL_IMPORT_STD` is defined, then you must also import the thread pool library itself as a module. If the library is included as a header file, this will force the program that included the header file to also import `std`, which is not desirable and can lead to compilation errors if the program `#include`s any Standard Library header files.
 
@@ -2738,7 +2819,7 @@ Defining the macro before importing the module will not work, as modules cannot 
 
 [The test program](#testing-the-library) will also import the `std` module if the macro `BS_THREAD_POOL_IMPORT_STD` is defined at compilation time. In that case, you should also enable the macro `BS_THREAD_POOL_TEST_IMPORT_MODULE` to import the thread pool library as a module.
 
-The `constexpr` flag `BS::thread_pool_import_std` indicates whether the thread pool library was compiled with `import std`. Note that the flag will be `false` if `BS_THREAD_POOL_IMPORT_STD` is defined but the compiler or standard library does not support importing the C&plus;&plus; Standard Library as a module.
+The `constexpr` flag `BS::thread_pool_import_std` indicates whether the thread pool library was compiled with `import std`. Note that the flag will be `false` if `BS_THREAD_POOL_IMPORT_STD` is defined but C&plus;&plus;23 support is not enabled in the compiler.
 
 At the time of writing, importing the `std` module requires compiling it first. As explained in the [previous section](#importing-the-library-as-a-c20-module), using the bundled `compile_cpp.py` script is the easiest way to do this, as we show in the [next section](#compiling-with-compile_cpppy-using-import-std). However, for those who wish to compile manually, in the following sections we will explain how to do it with both Clang and MSVC, as well as with CMake. It is assumed that the reader has already read the section about importing the `BS.thread_pool` library as a module, so we omit some details here.
 
@@ -2764,17 +2845,17 @@ C++ Standard Library imported using:
 * Test program: import std (C++23 std module).
 ```
 
-For further customization, it is recommend to create a `compile_cpp.yaml` file as explained [below](#the-compile_cpppy-script).
+For further customization, it is recommended to create a `compile_cpp.yaml` file as explained [below](#the-compile_cpppy-script).
 
 ### Compiling with Clang and LLVM libc&plus;&plus; using `import std`
 
-Note: The following instructions have only been tested using Clang v19.1.6 and LLVM libc&plus;&plus; v19.1.6, the latest versions at the time of writing, and may not work with older versions.
+Note: The following instructions have only been tested using Clang v21.1.8 and LLVM libc&plus;&plus; v21.1.8, the latest versions at the time of writing, and may not work with older versions.
 
 Before compiling the `std` module, you must find the file `std.cppm`:
 
-* On Windows, libc&plus;&plus; is most likely installed via [MSYS2](https://www.msys2.org/), so the `std` module should be at `C:\msys64\clang64\share\libc&plus;&plus;\v1\std.cppm`. If you did not install MSYS2 in `C:\msys64`, replace that with the correct path. If you installed libc&plus;&plus; without MSYS2, locate `std.cppm` manually in the installation folder.
-* On Linux, the `std` module should be at `/usr/lib/llvm-<LLVM major version>/share/libc&plus;&plus;/v1/std.cppm`. Replace `<LLVM major version>` with the major version number of libc&plus;&plus;, e.g. `19`. If you installed libc&plus;&plus; in a different folder, locate `std.cppm` manually in that folder.
-* On macOS, the `std` module should be at `/usr/local/Cellar/llvm/<LLVM full version>/share/libc&plus;&plus;/v1/std.cppm`. Replace `<LLVM full version>` with the full version number of libc&plus;&plus;, e.g. `19.1.6`. If you installed libc&plus;&plus; in a different folder, locate `std.cppm` manually in that folder.
+* On Windows, libc&plus;&plus; is most likely installed via [MSYS2](https://www.msys2.org/), so the `std` module should be at `C:\msys64\clang64\share\libc++\v1\std.cppm`. If you did not install MSYS2 in `C:\msys64`, replace that with the correct path. If you installed libc&plus;&plus; without MSYS2, locate `std.cppm` manually in the installation folder.
+* On Linux, the `std` module should be at `/usr/lib/llvm-<LLVM major version>/share/libc++/v1/std.cppm`. Replace `<LLVM major version>` with the major version number of libc&plus;&plus;. If you installed libc&plus;&plus; in a different folder, locate `std.cppm` manually in that folder.
+* On macOS with the ([Homebrew build](https://formulae.brew.sh/formula/llvm)), the `std` module should be at `/usr/local/Cellar/llvm/<LLVM full version>/share/libc++/v1/std.cppm`. Replace `<LLVM full version>` with the full version number of libc&plus;&plus;. If you installed libc&plus;&plus; in a different folder, locate `std.cppm` manually in that folder.
 
 To compile the module file `std.cppm` with Clang, first create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
@@ -2784,7 +2865,7 @@ clang++ "path to std.cppm" --precompile -std=c++23 -o build/std.pcm -Wno-reserve
 
 Of course, you should replace `"path to std.cppm"` with the actual path. The compiler arguments are explained [above](#compiling-with-clang-using-import-bsthread_pool). The additional argument `-Wno-reserved-module-identifier` is needed to silence a false-positive warning.
 
-Next, compile the `BS.thread_pool` module as [above](#compiling-with-clang-using-import-bsthread_pool), but with the following additional flags:
+Next, compile the `BS.thread_pool` module as [above](#compiling-with-clang-using-import-bsthread_pool), but with `-std=c++23` and the following additional flags:
 
 * `-fmodule-file="std=build/std.pcm"`: Specify that the module `std` is located in the file `build/std.pcm`.
 * `-D BS_THREAD_POOL_IMPORT_STD`: Instruct the library to import the `std` module.
@@ -2807,11 +2888,47 @@ C++ Standard Library imported using:
 * Test program: import std (C++23 std module).
 ```
 
+### Compiling with GCC and GNU libstdc&plus;&plus; using `import std`
+
+Note: The following instructions have only been tested using GCC v15.2.0 and GNU libstdc&plus;&plus; v15 (20250917), the latest versions at the time of writing, and may not work with older versions.
+
+With GNU libstdc&plus;&plus;, the `std` module file is always available as the system module `bits/std.cc`. To compile this module file with GCC, first create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
+
+```bash
+g++ -fsearch-include-path bits/std.cc -c "-fmodule-mapper=|@g++-mapper-server -r build" -fmodule-only -fmodules -std=c++23 -I include
+```
+
+The compiler arguments are explained [above](#compiling-with-gcc-using-import-bsthread_pool). The additional argument `-fsearch-include-path` is needed to tell the compiler to look for `bits/std.cc` in the include path (otherwise it will assume it is in the current directory).
+
+Next, compile the `BS.thread_pool` module as [above](#compiling-with-gcc-using-import-bsthread_pool), but with `-std=c++23` and the following additional flags:
+
+* `-D BS_THREAD_POOL_IMPORT_STD`: Instruct the library to import the `std` module.
+
+```bash
+g++ -x c++ modules/BS.thread_pool.cppm -c "-fmodule-mapper=|@g++-mapper-server -r build" -fmodule-only -fmodules -std=c++23 -I include -D BS_THREAD_POOL_IMPORT_STD
+```
+
+Add `-D BS_THREAD_POOL_NATIVE_EXTENSIONS` if you wish to enable the [native extensions](#native-extensions). Once the module is compiled, you can compile the test program as follows:
+
+```bash
+g++ tests/BS_thread_pool_test.cpp "-fmodule-mapper=|@g++-mapper-server -r build" -fmodules -std=c++23 -o build/BS_thread_pool_test -D BS_THREAD_POOL_TEST_IMPORT_MODULE -D BS_THREAD_POOL_IMPORT_STD
+```
+
+Again, you should add `-D BS_THREAD_POOL_NATIVE_EXTENSIONS` if you wish to test the native extensions. If you now type `build/BS_thread_pool_test`, the test program will run. If the `std` module was successfully imported, the test program will print the message:
+
+```none
+C++ Standard Library imported using:
+* Thread pool library: import std (C++23 std module).
+* Test program: import std (C++23 std module).
+```
+
+**NOTE:** At the time of writing, there is a bug when using GCC with libstdc++ on Windows via MSYS2 where the `BS.thread_pool` module doesn't compile if both native extensions and `import std` are enabled. As a workaround, until the bug is fixed, the thread pool library automatically falls back to header files if it detects that GCC and libstdc++ are being used together with the C++23 `std` module on Windows. This workaround can be disabled by defining `BS_THREAD_POOL_DISABLE_WORKAROUNDS` when compiling the module.
+
 ### Compiling with MSVC and Microsoft STL using `import std`
 
-Note: The following instructions have only been tested using MSVC v19.42.34435 and Microsoft STL v143 (202408), the latest versions at the time of writing, and may not work with older versions.
+Note: The following instructions have only been tested using MSVC v19.50.35721 and Microsoft STL v145 (202508), the latest versions at the time of writing, and may not work with older versions.
 
-Before compiling the `std` module, you must find the file `std.ixx`. It should be located in the folder `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\<MSVC runtime version>\modules`. Replace `<MSVC runtime version>` with the full version number of the MSVC runtime library, e.g. `14.42.34433`. If you installed Visual Studio in a different folder, locate `std.ixx` manually in that folder.
+Before compiling the `std` module, you must find the file `std.ixx`. If you have Visual Studio 2026, it should be located in the folder `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\<MSVC runtime version>\modules`. Replace `<MSVC runtime version>` with the full version number of the MSVC runtime library; the latest is `14.50.35717` at the time of writing. If you installed Visual Studio in a different folder, locate `std.ixx` manually in that folder.
 
 To compile the module file `std.ixx` with MSVC, first open the Visual Studio Developer PowerShell for the appropriate CPU architecture as explained [above](#compiling-with-msvc-using-import-bsthread_pool). Navigate to the repository folder, create the `build` folder using `mkdir build`, and then run the following command in the root folder of the repository:
 
@@ -2846,12 +2963,12 @@ C++ Standard Library imported using:
 
 ### Compiling with CMake using `import std`
 
-Note: The following instructions have only been tested using CMake v3.31.2, the latest version at the time of writing, and may not work with older versions. Also, modules are currently only supported by CMake with the [`Ninja`](https://ninja-build.org/) and `Visual Studio 17 2022` generators.
+Note: The following instructions have only been tested using CMake v4.2.1, the latest version at the time of writing, and may not work with older versions. Also, modules are currently not supported by CMake with all generators; please see the CMake documentation for more information.
 
 If you are using [CMake](https://cmake.org/), you can enable `CMAKE_EXPERIMENTAL_CXX_IMPORT_STD` to automatically compile the `std` module, provided the compiler and standard library support it. Here is an example of a `CMakeLists.txt` file that can be used to build the test program, import the thread pool library as a module, and import the C&plus;&plus; Standard Library as a module:
 
 ```cmake
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.2.1)
 project(BS_thread_pool_test LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -2911,17 +3028,6 @@ vcpkg upgrade
 
 Please refer to [this package's page on vcpkg.io](https://vcpkg.io/en/package/bshoshany-thread-pool) for more information.
 
-### Installing using Conan
-
-If you are using the [Conan](https://conan.io/) C/C&plus;&plus; package manager, you can easily integrate `BS::thread_pool` into your project by adding the following lines to your `conanfile.txt`:
-
-```ini
-[requires]
-bshoshany-thread-pool/5.0.0
-```
-
-To update the package to the latest version, simply change the version number. Please refer to [this package's page on ConanCenter](https://conan.io/center/recipes/bshoshany-thread-pool) for more information.
-
 ### Installing using Meson
 
 If you are using the [Meson](https://mesonbuild.com/) build system, you can install `BS::thread_pool` from [WrapDB](https://mesonbuild.com/Wrapdb-projects.html). To do so, create a `subprojects` folder in your project (if it does not already exist) and run the following command:
@@ -2936,9 +3042,20 @@ Then, use `dependency('bshoshany-thread-pool')` in your `meson.build` file to in
 meson wrap update bshoshany-thread-pool
 ```
 
+### Installing using Conan
+
+If you are using the [Conan](https://conan.io/) C/C&plus;&plus; package manager, you can easily integrate `BS::thread_pool` into your project by adding the following lines to your `conanfile.txt`:
+
+```ini
+[requires]
+bshoshany-thread-pool/5.1.0
+```
+
+To update the package to the latest version, simply change the version number. Please refer to [this package's page on ConanCenter](https://conan.io/center/recipes/bshoshany-thread-pool) for more information.
+
 ### Installing using CMake with CPM
 
-Note: The following instructions have only been tested using CMake v3.31.2 and CPM v0.40.2, the latest versions at the time of writing, and may not work with older versions.
+Note: The following instructions have only been tested using CMake v4.2.1 and CPM v0.42.0, the latest versions at the time of writing, and may not work with older versions.
 
 If you are using [CMake](https://cmake.org/), you can install `BS::thread_pool` most easily with [CPM](https://github.com/cpm-cmake/CPM.cmake). If CPM is already installed, simply add the following to your project's `CMakeLists.txt`:
 
@@ -2946,7 +3063,7 @@ If you are using [CMake](https://cmake.org/), you can install `BS::thread_pool` 
 CPMAddPackage(
     NAME BS_thread_pool
     GITHUB_REPOSITORY bshoshany/thread-pool
-    VERSION 5.0.0
+    VERSION 5.1.0
     EXCLUDE_FROM_ALL
     SYSTEM
 )
@@ -2959,7 +3076,7 @@ This will automatically download the indicated version of the package from [the 
 A convenient shorthand for GitHub packages also exists, in which case `CPMAddPackage()` can be called with a single argument of the form `"gh:user/name@version"`. After that, `CPM_LAST_PACKAGE_NAME` will be set to the name of the package, so we need to use this variable to define the include folder. This results in a more compact configuration:
 
 ```cmake
-CPMAddPackage("gh:bshoshany/thread-pool@5.0.0")
+CPMAddPackage("gh:bshoshany/thread-pool@5.1.0")
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${${CPM_LAST_PACKAGE_NAME}_SOURCE_DIR}/include)
 ```
@@ -2974,10 +3091,10 @@ endif()
 include(${CPM_DOWNLOAD_LOCATION})
 ```
 
-Here is an example of a complete `CMakeLists.txt` which automatically downloads and compiles the test program [`BS_thread_pool_test.cpp`](#automated-tests):
+Here is an example of a complete `CMakeLists.txt` which automatically downloads and compiles the test program [`BS_thread_pool_test.cpp`](#testing-the-library):
 
 ```cmake
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.2.1)
 project(BS_thread_pool_test LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -2993,7 +3110,7 @@ if(NOT(EXISTS ${CPM_DOWNLOAD_LOCATION}))
 endif()
 include(${CPM_DOWNLOAD_LOCATION})
 
-CPMAddPackage("gh:bshoshany/thread-pool@5.0.0")
+CPMAddPackage("gh:bshoshany/thread-pool@5.1.0")
 add_library(BS_thread_pool INTERFACE)
 target_include_directories(BS_thread_pool INTERFACE ${${CPM_LAST_PACKAGE_NAME}_SOURCE_DIR}/include)
 
@@ -3001,9 +3118,9 @@ add_executable(${PROJECT_NAME} ${${CPM_LAST_PACKAGE_NAME}_SOURCE_DIR}/tests/BS_t
 target_link_libraries(${PROJECT_NAME} PRIVATE BS_thread_pool)
 ```
 
-Note that for MSVC we have to add the `/permissive-` flag to enforce strict C&plus;&plus; standard conformance, otherwise the test program will not compile, and `/Zc:__cplusplus`, otherwise the test program cannot detect the correct C&plus;&plus; version. This is handled automatically by the `if(MSVC)` block.
+The `if(MSVC)` block is explained [above](#compiling-with-msvc-using-import-bsthread_pool). To enable the [native extensions](#native-extensions), add the line `add_compile_definitions(BS_THREAD_POOL_NATIVE_EXTENSIONS)`.
 
-To enable the [native extensions](#native-extensions), add the line `add_compile_definitions(BS_THREAD_POOL_NATIVE_EXTENSIONS)`. Replace `CMAKE_CXX_STANDARD 17` with `20` or `23` if you wish to use C&plus;&plus;20 or C&plus;&plus;23 features, respectively. Of course, you should add warning, debugging, optimization, and other compiler flags to the configuration above as needed.
+Replace `CMAKE_CXX_STANDARD 17` with `20` or `23` if you wish to use C&plus;&plus;20 or C&plus;&plus;23 features, respectively. Of course, you should add warning, debugging, optimization, and other compiler flags to the configuration above as needed.
 
 With this `CMakeLists.txt` in an empty folder, type the following commands to build and run the project:
 
@@ -3017,12 +3134,12 @@ For MSVC, replace the last command with `build/Debug/BS_thread_pool_test`. Pleas
 
 ### Installing using CMake with `FetchContent`
 
-Note: The following instructions have only been tested using CMake v3.31.2, the latest version at the time of writing, and may not work with older versions.
+Note: The following instructions have only been tested using CMake v4.2.1, the latest version at the time of writing, and may not work with older versions.
 
 If you are using [CMake](https://cmake.org/) but do not wish to use 3rd-party tools, you can also install `BS::thread_pool` using the built-in [`FetchContent`](https://cmake.org/cmake/help/latest/module/FetchContent.html) module. Here is an example of a complete `CMakeLists.txt` which automatically downloads and compiles the test program, as in the previous section, but this time using `FetchContent` directly:
 
 ```cmake
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 4.2.1)
 project(BS_thread_pool_test LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -3037,7 +3154,7 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 FetchContent_Declare(
     bshoshany_thread_pool
     GIT_REPOSITORY https://github.com/bshoshany/thread-pool.git
-    GIT_TAG v5.0.0
+    GIT_TAG v5.1.0
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     EXCLUDE_FROM_ALL
     SYSTEM
@@ -3061,14 +3178,14 @@ Descriptions of each item can also be found in the [Doxygen](https://www.doxygen
 `BS::thread_pool` is the main thread pool class. It is used to create a pool of threads that continuously execute tasks submitted to a queue. It can take template parameters, which enable optional features as described [below](#optional-features-and-the-template-parameter). The member functions that are available by default, when no template parameters are used, are:
 
 * Constructors:
-    * `thread_pool()`: Construct a new thread pool with a number of threads equal to `std::thread::hardware_concurrency()`.
+    * `thread_pool()`: Construct a new thread pool with a number of threads equal to `std::thread::hardware_concurrency()`, or if the native extensions are enabled, the number of threads available to the process as obtained from `BS::get_os_process_affinity()`.
     * `thread_pool(std::size_t num_threads)`: Construct a new thread pool with the specified number of threads.
-    * `thread_pool(F&& init)`: Construct a new thread pool with a number of threads equal to `std::thread::hardware_concurrency()` and the specified initialization function. `F` is a template parameter.
+    * `thread_pool(F&& init)`: Construct a new thread pool with the default number of threads and the specified initialization function. `F` is a template parameter.
     * `thread_pool(std::size_t num_threads, F&& init)`: Construct a new thread pool with the specified number of threads and the specified initialization function.
 * Resetters:
-    * `void reset()`: Reset the pool with a number of threads equal to `std::thread::hardware_concurrency()`, waiting for running tasks first, and preserving submitted tasks after the reset.
+    * `void reset()`: Reset the pool with the default number of threads (as if constructed with the default constructor). Waits for all tasks first; if pausing is enabled, waits only for running tasks, and queued tasks resume after the pool is reset. If the pool was paused before resetting it, the new pool will be paused as well.
     * `void reset(std::size_t num_threads)`: Reset the pool with a new number of threads.
-    * `void reset(F&& init)` Reset the pool with a number of threads equal to `std::thread::hardware_concurrency()` and a new initialization function. `F` is a template parameter.
+    * `void reset(F&& init)`: Reset the pool with the default number of threads and a new initialization function. `F` is a template parameter.
     * `void reset(std::size_t num_threads, F&& init)`: Reset the pool with a new number of threads and a new initialization function.
 * Setters:
     * `void set_cleanup_func(F&& cleanup)`: Set the thread pool's cleanup function. `F` is a template parameter.
@@ -3078,16 +3195,20 @@ Descriptions of each item can also be found in the [Doxygen](https://www.doxygen
     * `std::size_t get_tasks_total()`: Get the total number of unfinished tasks: either still waiting in the queue, or running in a thread. Note that `get_tasks_total() == get_tasks_queued() + get_tasks_running()`.
     * `std::size_t get_thread_count()`: Get the number of threads in the pool.
     * `std::vector<std::thread::id> get_thread_ids()`: Get a vector containing the unique identifiers for each of the pool's threads, as obtained by `std::thread::get_id()` (or `std::jthread::get_id()` in C&plus;&plus;20 and later).
-* Task submission without futures (`T1`, `T2`, and `F` are template parameters):
+* Task submission without futures (`T1`, `T2`, `F`, `C`, and `I` are template parameters):
     * `void detach_task(F&& task)`: Submit a function with no arguments and no return value into the task queue. To submit a function with arguments, enclose it in a lambda expression.
-    * `void detach_blocks(T1 first_index, T2 index_after_last, F&& block, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The block function takes two arguments, the start and end of the block, so that it is only called once per block, but it is up to the user make sure the block function correctly deals with all the indices in each block.
+    * `void detach_blocks(T1 first_index, T2 index_after_last, F&& block, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The block function takes two arguments, the start and end of the block, so that it is only called once per block, but it is up to the user to make sure the block function correctly deals with all the indices in each block.
     * `void detach_loop(T1 first_index, T2 index_after_last, F&& loop, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The loop function takes one argument, the loop index, so that it is called many times per block.
-    * `void detach_sequence(1T first_index, T2 index_after_last, F&& sequence)`: Submit a sequence of tasks enumerated by indices to the queue. The sequence function takes one argument, the task index, and will be called once per index.
-* Task submission with futures (`T1`, `T2`, `F`, and `R` are template parameters):
+    * `void detach_sequence(T1 first_index, T2 index_after_last, F&& sequence)`: Submit a sequence of tasks enumerated by indices to the queue. The sequence function takes one argument, the task index, and will be called once per index.
+    * `void detach_bulk(C& container)`: Submit a container of functions with no arguments and no return values to the queue.
+    * `void detach_bulk(I first, I last)`: Submit an iterator range containing functions with no arguments and no return values to the queue.
+* Task submission with futures (`T1`, `T2`, `F`, `R`, `C`, and `I` are template parameters):
     * `std::future<R> submit_task(F&& task)`: Submit a function with no arguments into the task queue. To submit a function with arguments, enclose it in a lambda expression.
-    * `BS::multi_future<R> submit_blocks(T1 first_index, T2 index_after_last, F&& block, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The block function takes two arguments, the start and end of the block, so that it is only called once per block, but it is up to the user make sure the block function correctly deals with all the indices in each block. Returns a `BS::multi_future` that contains the futures for all of the blocks.
-    * `BS::multi_future<void> submit_loop(T1 first_index, T2 index_after_last, F&& loop, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The loop function takes one argument, the loop index, so that it is called many times per block. It must have no return value. Returns a `BS::multi_future` that contains the futures for all of the blocks.
-    * `BS::multi_future<R> submit_sequence(T1 first_index, T2 index_after_last, F&& sequence)`: Submit a sequence of tasks enumerated by indices to the queue. The sequence function takes one argument, the task index, and will be called once per index. Returns a `BS::multi_future` that contains the futures for all of the tasks.
+    * `BS::multi_future<R> submit_blocks(T1 first_index, T2 index_after_last, F&& block, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The block function takes two arguments, the start and end of the block, so that it is only called once per block, but it is up to the user to make sure the block function correctly deals with all the indices in each block. Returns a `BS::multi_future` that contains the futures for all the blocks.
+    * `BS::multi_future<void> submit_loop(T1 first_index, T2 index_after_last, F&& loop, std::size_t num_blocks = 0)`: Parallelize a loop by automatically splitting it into blocks. The loop function takes one argument, the loop index, so that it is called many times per block. It must have no return value. Returns a `BS::multi_future` that contains the futures for all the blocks.
+    * `BS::multi_future<R> submit_sequence(T1 first_index, T2 index_after_last, F&& sequence)`: Submit a sequence of tasks enumerated by indices to the queue. The sequence function takes one argument, the task index, and will be called once per index. Returns a `BS::multi_future` that contains the futures for all the tasks.
+    * `BS::multi_future<R> submit_bulk(C& container)`: Submit a container of functions with no arguments to the queue. Returns a `BS::multi_future` that contains the futures for all the tasks.
+    * `BS::multi_future<R> submit_bulk(I first, I last)`: Submit an iterator range containing functions with no arguments to the queue. Returns a `BS::multi_future` that contains the futures for all the tasks.
 * Task management:
     * `void purge()`: Purge all the tasks waiting in the queue. Please note that there is no way to restore the purged tasks.
 * Waiting for tasks (`R`, `P`, `C`, and `D` are template parameters):
@@ -3099,14 +3220,14 @@ Descriptions of each item can also be found in the [Doxygen](https://www.doxygen
 
 ### Optional features and the template parameter
 
-The thread pool has several optional features that must be explicitly enabled by passing a template parameter. The template parameter is a bitmask, so you can enable several features at once by combining them with the bitwise OR operator `|`. The bitmask flags are members of the `BS::tp` enumeration.
+The thread pool has several optional features that must be explicitly enabled by passing a template parameter. The template parameter is a bitmask, so you can enable several features at once by combining them with the bitwise OR operator `|`. The bitmask flags are members of the `BS::tp` enumeration class.
 
 * **Task priority:** Enabled by turning on the `BS::tp::priority` flag in the template parameter. When enabled, the static member `priority_enabled` will be set to `true`.
     * When enabled, the priority of a task or group of tasks may be specified as an additional argument (at the end of the argument list) to all detach and submit functions. If the priority is not specified, the default value will be 0.
     * The priority is of type `BS::priority_t`, a signed 8-bit integer, with values between -128 and +127. The tasks will be executed in priority order from highest to lowest. Groups of parallelized tasks will all have the same priority.
     * The enumeration `BS::pr` contains some pre-defined priorities: `BS::pr::highest`, `BS::pr::high`, `BS::pr::normal`, `BS::pr::low`, and `BS::pr::lowest`.
 * **Pausing:** Enabled by turning on the `BS::tp::pause` flag in the template parameter. When enabled, the static member `pause_enabled` will be set to `true`. Adds the following member functions:
-    * `void pause()`: Pause the pool. The workers will temporarily stop retrieving new tasks out of the queue, although any tasks already executed will keep running until they are finished.
+    * `void pause()`: Pause the pool. The workers will temporarily stop retrieving new tasks out of the queue, although any tasks already executing will keep running until they are finished.
     * `void unpause()`: Unpause the pool. The workers will resume retrieving new tasks out of the queue.
     * `bool is_paused()`: Check whether the pool is currently paused.
 * **Wait deadlock checks:** Enabled by turning on the `BS::tp::wait_deadlock_checks` flag in the template parameter. When enabled, the static member `wait_deadlock_checks_enabled` will be set to `true`.
@@ -3135,19 +3256,19 @@ The native extensions may be enabled by defining the macro `BS_THREAD_POOL_NATIV
 
 The native extensions add the following functions to the `BS` namespace:
 
-* `bool set_os_process_affinity(std::vector<bool>& affinity)`: Set the processor affinity of the current process. The argument is an `std::vector<bool>` where each element corresponds to a logical processor. Returns `true` if the affinity was set successfully, `false` otherwise. Does not work on macOS.
+* `bool BS::set_os_process_affinity(std::vector<bool>& affinity)`: Set the processor affinity of the current process. The argument is an `std::vector<bool>` where each element corresponds to a logical processor. Returns `true` if the affinity was set successfully, `false` otherwise. Does not work on macOS.
 * `std::optional<std::vector<bool>> BS::get_os_process_affinity()`: Get the processor affinity of the current process. The optional object will not have a value if the affinity could not be determined. Does not work on macOS.
 * `bool BS::set_os_process_priority(BS::os_process_priority priority)`: Set the priority of the current process. The argument must be a member of the `BS::os_process_priority` enumeration, which contains the options `idle`, `below_normal`, `normal`, `above_normal`, `high`, and `realtime`. Returns `true` if the priority was set successfully, or `false` otherwise.
 * `std::optional<BS::os_process_priority> BS::get_os_process_priority()`: Get the priority of the current process. The optional object will not have a value if the priority could not be determined, or it is not one of the pre-defined values in the `BS::os_process_priority` enumeration.
 
 The native extensions also add the following static member functions to `BS::this_thread`:
 
-* `bool set_os_thread_affinity(std::vector<bool>& affinity)`: Set the processor affinity of the current thread. The argument is an `std::vector<bool>` where each element corresponds to a logical processor. Note that the thread affinity must be a subset of the process affinity for the containing process of a thread. Does not work on macOS.
-* `std::optional<std::vector<bool>> get_os_thread_affinity()`: Get the processor affinity of the current thread. The optional object will not have a value if the affinity could not be determined. Does not work on macOS.
-* `bool set_os_thread_name(std::string& name)`: Set the name of the current thread. Note that on Linux thread names are limited to 16 characters, including the null terminator. Returns `true` if the name was set successfully, `false` otherwise.
-* `std::optional<std::string> get_os_thread_name()`: Get the name of the current thread. The optional object will not have a value if the name could not be determined.
-* `bool set_os_thread_priority(BS::os_thread_priority priority)`: Set the priority of the current thread. The argument must be a member of the `BS::os_thread_priority` enumeration, which contains the options `idle`, `lowest`, `below_normal`, `normal`, `above_normal`, `highest`, and `realtime`. Returns `true` if the priority was set successfully, or `false` otherwise.
-* `std::optional<os_thread_priority> get_os_thread_priority()`: Get the priority of the current thread. The optional object will not have a value if the priority could not be determined, or it is not one of the pre-defined values in the `BS::os_thread_priority` enumeration.
+* `bool BS::this_thread::set_os_thread_affinity(std::vector<bool>& affinity)`: Set the processor affinity of the current thread. The argument is an `std::vector<bool>` where each element corresponds to a logical processor. Note that the thread affinity must be a subset of the process affinity for the containing process of a thread. Does not work on macOS and Android.
+* `std::optional<std::vector<bool>> BS::this_thread::get_os_thread_affinity()`: Get the processor affinity of the current thread. The optional object will not have a value if the affinity could not be determined. Does not work on macOS and Android.
+* `bool BS::this_thread::set_os_thread_name(std::string& name)`: Set the name of the current thread. Note that on Linux thread names are limited to 16 characters, including the null terminator. Returns `true` if the name was set successfully, `false` otherwise.
+* `std::optional<std::string> BS::this_thread::get_os_thread_name()`: Get the name of the current thread. The optional object will not have a value if the name could not be determined.
+* `bool BS::this_thread::set_os_thread_priority(BS::os_thread_priority priority)`: Set the priority of the current thread. The argument must be a member of the `BS::os_thread_priority` enumeration, which contains the options `idle`, `lowest`, `below_normal`, `normal`, `above_normal`, `highest`, and `realtime`. Returns `true` if the priority was set successfully, or `false` otherwise.
+* `std::optional<BS::os_thread_priority> BS::this_thread::get_os_thread_priority()`: Get the priority of the current thread. The optional object will not have a value if the priority could not be determined, or it is not one of the pre-defined values in the `BS::os_thread_priority` enumeration.
 
 Finally, the native extensions add the following member function to `BS::thread_pool`:
 
@@ -3208,9 +3329,7 @@ The library defines the following `constexpr` variables:
 
 When the library is imported as a C&plus;&plus;20 module using `import BS.thread_pool`, it exports the following names, in alphabetical order:
 
-* `BS::binary_semaphore`
 * `BS::common_index_type_t`
-* `BS::counting_semaphore`
 * `BS::light_thread_pool`
 * `BS::multi_future`
 * `BS::pause_thread_pool`
@@ -3224,10 +3343,13 @@ When the library is imported as a C&plus;&plus;20 module using `import BS.thread
 * `BS::thread_pool_module`
 * `BS::thread_pool_native_extensions`
 * `BS::thread_pool_version`
-* `BS::tp`
+* `BS::tp` (plus related bitwise operators)
 * `BS::version`
-* `BS::wait_deadlock`
 * `BS::wdc_thread_pool`
+
+If exceptions are enabled, the following names are also exported:
+
+* `BS::wait_deadlock`
 
 If the native extensions are enabled, the following names are also exported:
 
@@ -3242,7 +3364,7 @@ If the native extensions are enabled, the following names are also exported:
 
 ### The `compile_cpp.py` script
 
-The Python script `compile_cpp.py`, in the `scripts` folder of [the GitHub repository](https://github.com/bshoshany/thread-pool), can be used to compile any C&plus;&plus; source file with different compilers on different platforms. It requires Python 3.12 or later.
+The Python script `compile_cpp.py`, in the `scripts` folder of [the GitHub repository](https://github.com/bshoshany/thread-pool), can be used to compile any C&plus;&plus; source file with different compilers on different platforms. It has only been tested using Python v3.14.2, the latest version at the time of writing, and may not work with older versions.
 
 The script was written by the author of the library to make it easier to test the library with different combinations of compilers, standards, and platforms using the built-in Visual Studio Code tasks. However, note that this script is not meant to replace CMake or any full-fledged build system, it's just a convenient script for developing single-header libraries like this one or other small projects.
 
@@ -3253,51 +3375,56 @@ The compilation parameters can be configured using the command line arguments an
 * Positional argument(s): the source file(s) to compile.
 * `-h` or `--help`: Show the help message and exit.
 * `-a` or `--arch`: The target architecture (MSVC only). Must be one of `[amd64, arm64]`, default is `amd64`.
+* `-b` or `--clear-output`: Clear the output folder before compiling. If no source files are specified, just clear and exit. The outcome is always an empty output folder.
 * `-c` or `--compiler`: Which compiler to use. Must be one of `[cl, clang++, g++]`. The default is to determine it automatically based on the platform.
 * `-d` or `--define`: Macros to define. Use this argument multiple times to define more than one macro. Additional macros can be defined in `compile_cpp.yaml`.
+* `-e` or `--force`: Force recompilation even if the executable is up to date.
 * `-f` or `--flag`: Extra compiler flags to add. Use this argument multiple times to add more than one flag. Additional flags can be specified in `compile_cpp.yaml`.
+* `-g` or `--ignore-config`: Ignore the `compile_cpp.yaml` configuration file, if it exists.
 * `-i` or `--include`: The include folder to use. Use this argument multiple times to use more than one include folder. Additional include folders can be specified in `compile_cpp.yaml`.
 * `-l` or `--as-module`: Enable this flag to compile the file as a C&plus;&plus;20 module.
-* `-m` or `--module`: C&plus;&plus;20 module files to use if desired, in the format `module_name=module_file,dependent_files,...`. Use this argument multiple times to use more than one module. Additional modules can be specified in `compile_cpp.yaml`. The dependent files are only used to determine whether the module needs to be recompiled.
-* `-o` or `--output`: The output folder and/or executable name. End with `/` to create the folder if it doesn't already exist. If not specified, the folder defined in `compile_cpp.yaml` will be used. If the executable name is not specified, it will be determined automatically in the format `source_[module_]type-compiler-standard` where:
+* `-m` or `--module`: C&plus;&plus;20 module files to use if desired, in the format `module_name=module_file,dependencies,...`. Use this argument multiple times to use more than one module. Additional modules can be specified in `compile_cpp.yaml`. The dependencies are only used to determine whether the module needs to be recompiled.
+* `-n` or `--deps`: Dependencies used to detect if recompilation is needed. If these files are modified, then the executable is recompiled even if the source files have not been modified. Use this argument multiple times to add more than one dependency. Additional dependencies can be specified in `compile_cpp.yaml`. Note that this is not used for C&plus;&plus;20 modules, which have their own dependencies, listed when using `-m`.
+* `-o` or `--output`: The output folder and/or executable name. End with `/` to create the folder if it doesn't already exist. If not specified, the folder defined in `compile_cpp.yaml` will be used. If the executable name is not specified, it will be determined automatically in the format `{source}_[module_]{type}-{compiler}-{standard}` where:
     * `source` is the name of the first source file (without the extension).
-    * `module_`, if present, indicates that the file is a C&plus;&plus;20 module.
+    * `module_`, if present, indicates that the file is a C&plus;&plus;20 module (if `-l`/`--as-module` is enabled)
     * `type` is one of `[debug, release]`.
     * `compiler` is one of `[clang, gcc, msvc]`.
-    * `standard` is one of `[c++17, c++20, c++23]`.
-* `-p` or `--pass`: Pass command line arguments to the compiled program when running it, if `-r` is specified. Use this argument multiple times to pass more than one argument to the program. Additional arguments can be specified in `compile_cpp.yaml`.
+    * `standard` is one of `[cpp17, cpp20, cpp23]`.
+* `-p` or `--pass`: Pass command line arguments to the compiled program when running it, if `-r`/`--run` is specified. Use this argument multiple times to pass more than one argument to the program. Additional arguments can be specified in `compile_cpp.yaml`.
 * `-r` or `--run`: Enable this flag to run the program after compiling it.
 * `-s` or `--std`: Which C&plus;&plus; standard to use. Must be one of `[c++17, c++20, c++23]`. The default is `c++23`.
 * `-t` or `--type`: Which mode to compile in. Must be one of `[debug, release]`. The default is `debug`.
 * `-u` or `--std-module`: Specify the path to the standard library module (C&plus;&plus;23 only). Taken from `compile_cpp.yaml` if not specified. Use `auto` to auto-detect or `disable` to explicitly disable.
 * `-v` or `--verbose`: Enable this flag to print the script's diagnostic messages.
+* `-x` or `--disable-exceptions`: If set to `true`, disables exceptions in the compiler flags. If set to `false`, exceptions will be enabled. If not specified, the setting will be taken from `compile_cpp.yaml`.
+* `-y` or `--try-all`: Test compilation using all possible combinations of compilers and C++ standards available in the system. Also runs each compiled program if `-r`/`--run` is specified. All other arguments are passed to all compilation attempts. Cannot be used together with `-c`/`--compiler` or `-s`/`--std`.
 
 The `compile_cpp.yaml` file includes the following fields:
 
 * `defines`: A list of macros to define when compiling the source files.
+* `deps`: A list of dependencies, such as header files or libraries. All source files compiled using this script will be recompiled if any of these files change.
+* `disable_exceptions`: Whether to disable exceptions in the compiler flags. Defaults to `false` if not specified.
 * `flags`: A map of flags to pass to each compiler. The compiler should be one of `[cl, clang++, g++]`. The flags should be a list of strings.
 * `includes`: A list of include folders.
-* `modules`: A map of C&plus;&plus;20 modules in the format `module_name: [module_path, dependent files, ...]`. Will only be used in C&plus;&plus;20 or C&plus;&plus;23 mode. The dependent files are only used to determine whether the module needs to be recompiled.
+* `modules`: A map of C&plus;&plus;20 modules in the format `module_name: [module_path, dependencies, ...]`. Will only be used in C&plus;&plus;20 or C&plus;&plus;23 mode. The dependencies are only used to determine whether the module needs to be recompiled.
 * `output`: The output folder for the compiled files.
 * `pass_args`: A list of arguments to pass to the program if running it after compilation.
-* `std_module`: A map of paths to the standard library modules for each OS and compiler combination (C&plus;&plus;23 only). The OS should be one of `[Windows, Linux, Darwin]`. Use `Automatic` to determine the path automatically if possible.
+* `std_module`: A map of paths to the standard library modules for each OS and compiler combination (C&plus;&plus;23 only). The OS should be one of `[Windows, Linux, Darwin]`. Use `auto` to determine the path automatically if possible.
 
 Please see the `compile_cpp.yaml` file in the GitHub repository for an example of how to use it.
 
-### Other included tools
+By default, the script prints colored output using ANSI escape codes for better readability. This can be disabled by setting the `NO_COLOR` environment variable.
 
-The `scripts` folder of [the GitHub repository](https://github.com/bshoshany/thread-pool) contains two other Python scripts that are used in the development of the library:
+### Visual Studio Code tasks
 
-* `test_all.py` performs the [automated tests](#automated-tests) in C&plus;&plus;17, C&plus;&plus;20, and C&plus;&plus;23 modes, using all compilers available in the system (Clang, GCC, and/or MSVC). Since there are so many tests, the test script does not perform the benchmarks, as that would take too long. Pass the optional argument `--compile-only` to only check that the program compiles successfully with all compilers, without running it.
-* `clear_folder.py` is used to clean up output and temporary folders. It will create the folder if it does not already exist, so the outcome is always an empty folder.
-
-In addition, for Visual Studio Code users, the GitHub repository includes three `.vscode` folders:
+For Visual Studio Code users, the GitHub repository includes three `.vscode` folders:
 
 * `.vscode-windows`, to be used in Windows with Clang, GCC, and MSVC.
 * `.vscode-linux`, to be used in Linux with Clang and GCC.
 * `.vscode-macos`, to be used in macOS with LLVM Clang (not Apple Clang).
 
-Each folder contains appropriate `c_cpp_properties.json`, `launch.json`, and `tasks.json` files that utilize the included Python scripts. Users are welcome to use these files in their own projects, but they may require some modifications to work on specific systems.
+Each folder contains appropriate `c_cpp_properties.json`, `launch.json`, and `tasks.json` files that utilize the included Python script [`compile_cpp.py`](#the-compile_cpppy-script). Users are welcome to use these files in their own projects, but they may require some modifications to work on specific systems.
 
 ## About the project
 
@@ -3319,7 +3446,7 @@ Many GitHub users have helped improve this project, directly or indirectly, via 
 
 ### Copyright and citing
 
-Copyright (c) 2024 [Barak Shoshany](https://baraksh.com/). Licensed under the [MIT license](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt).
+Copyright (c) 2021-2026 [Barak Shoshany](https://baraksh.com/). Licensed under the [MIT license](https://github.com/bshoshany/thread-pool/blob/master/LICENSE.txt).
 
 If you use this library in software of any kind, please provide a link to [the GitHub repository](https://github.com/bshoshany/thread-pool) in the source code and documentation.
 

@@ -14,7 +14,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-clang-x64",
             "name": "Clang C++17"
@@ -33,7 +33,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-clang-x64",
             "name": "Clang C++20"
@@ -52,7 +52,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-clang-x64",
             "name": "Clang C++23"
@@ -68,7 +68,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-gcc-x64",
             "name": "GCC C++17"
@@ -84,7 +84,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-gcc-x64",
             "name": "GCC C++20"
@@ -100,7 +100,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-gcc-x64",
             "name": "GCC C++23"
@@ -116,7 +116,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-msvc-x64",
             "name": "MSVC C++17"
@@ -132,7 +132,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-msvc-x64",
             "name": "MSVC C++20"
@@ -148,7 +148,7 @@
                 "BS_THREAD_POOL_NATIVE_EXTENSIONS"
             ],
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include"
             ],
             "intelliSenseMode": "windows-msvc-x64",
             "name": "MSVC C++23"

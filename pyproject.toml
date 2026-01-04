@@ -134,6 +134,7 @@ ignore = [
     "S603",
     "S607",
     "SIM108",
+    "SIM112",
     "SLF001",
     "T201",
     "TCH003",
@@ -168,7 +169,6 @@ prefer-stubs = true
 py-version = "3.13"
 recursive = false
 source-roots = []
-suggestion-mode = true
 unsafe-load-any-extension = false
 
 [tool.pylint.basic]
